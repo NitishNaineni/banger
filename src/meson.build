@@ -4,6 +4,7 @@ sources = [
   'application.vala',
   'config.vapi',
   'main.vala',
+  'banger/banger-service.vala',
   'gst/ape-demux.c',
   'gst/gst-player.vala',
   'gst/peak-calculator.vala',
