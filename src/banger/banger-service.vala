@@ -142,6 +142,11 @@ namespace G4 {
             } catch (Error e) {
                 warning ("banger label: %s", e.message);
             }
+            // the sidecar regenerated Audition.m3u/Library.m3u — reload so the
+            // copied/removed track and the playlists update across the app.
+            var app = GLib.Application.get_default () as Application;
+            if (app != null)
+                ((!) app).reload_library ();
         }
 
         public async void like (Music music) {
@@ -153,7 +158,6 @@ namespace G4 {
                     var src = File.new_for_uri (music.uri);
                     yield src.copy_async (dst, FileCopyFlags.NONE);
                 }
-                yield notify_added (dst);
             } catch (Error e) {
                 toast (e.message);
             }
@@ -175,7 +179,6 @@ namespace G4 {
             if (dst.query_exists ()) {
                 try {
                     yield dst.delete_async ();
-                    yield notify_removed (dst);
                 } catch (Error e) {
                     toast (e.message);
                 }
@@ -258,18 +261,6 @@ namespace G4 {
             }
             yield load_labels ();
             return ok;
-        }
-
-        private async void notify_added (File f) {
-            var app = GLib.Application.get_default () as Application;
-            if (app != null)
-                yield ((!) app).loader.on_file_added (f);
-        }
-
-        private async void notify_removed (File f) {
-            var app = GLib.Application.get_default () as Application;
-            if (app != null)
-                yield ((!) app).loader.on_file_removed (f);
         }
 
         private void toast (string message) {

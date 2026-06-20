@@ -110,6 +110,9 @@ def cmd_label(con, path, rating):
     sent = _send_feedback(r["mbid"], rating)
     if sent:
         db.mark_feedback(con, r["id"]); con.commit()
+    # keep the playlists in sync with the like/dislike just made
+    write_m3u("Audition", AUDITION)
+    write_m3u("Library", LIBRARY)
     _line("ok", True)
     _line("rating", rating)
     _line("feedback_sent", sent)
