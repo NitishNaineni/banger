@@ -671,30 +671,37 @@ namespace G4 {
 
         private string? _album_key_of_list = null;
 
+        // Which list is currently mirrored into the play queue (so re-playing a track
+        // in the same album/artist/list doesn't needlessly re-splice the queue).
+        private MusicList? _queued_list = null;
+
         private void play_current_list (int index = 0) {
-            if (_app.current_list == _current_list.filter_model) {
+            play_list_as_queue (_current_list, index);
+        }
+
+        private void play_folder_list (MusicList list, int index) {
+            play_list_as_queue (list, index);
+        }
+
+        // Make `list` THE play queue (so the Playing tab shows exactly the album /
+        // artist / playlist / batch you're playing, and nothing else), then play
+        // `index` from the stable queue. The Playing tab itself already IS the queue.
+        private void play_list_as_queue (MusicList list, int index) {
+            if (list == _main_list
+                    || (_queued_list == list && _app.current_list == _main_list.filter_model)) {
                 _app.current_item = index;
-            } else if (_current_list.playable) {
-                var playlist = _current_list.get_as_playlist ();
-                _app.current_item = _app.insert_after_current (playlist) + index;
+            } else if (list.playable) {
+                var playlist = list.get_as_playlist ();
+                _app.music_queue.splice (0, _app.music_queue.get_n_items (), (Object[]) playlist.items.data);
+                _app.current_list = _main_list.filter_model;
+                _app.current_item = index;
+                _queued_list = list;
             }
             if (!_app.player.playing) {
                 _app.player.play ();
             }
 
             _album_key_of_list = _current_list.music_node?.album_key;
-        }
-
-        // banger: play a self-contained Audition/Library list by making it THE play
-        // queue (so the Playing tab shows exactly what's playing) and riding the
-        // stable queue — re-scanning that tab on like/unlike won't disturb playback.
-        private void play_folder_list (MusicList list, int index) {
-            var playlist = list.get_as_playlist ();
-            _app.music_queue.splice (0, _app.music_queue.get_n_items (), (Object[]) playlist.items.data);
-            _app.current_list = _main_list.filter_model;
-            _app.current_item = index;
-            if (!_app.player.playing)
-                _app.player.play ();
         }
 
         private void pop_page_without_animation (Stack stack) {
