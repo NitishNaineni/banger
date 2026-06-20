@@ -167,16 +167,22 @@ namespace G4 {
         }
 
         public async void like (Music music) {
+            var src = File.new_for_uri (music.uri);
             var dst = _library.get_child (basename_of (music.uri));
             try {
                 if (!_library.query_exists ())
                     _library.make_directory_with_parents ();
-                if (!dst.query_exists ()) {
-                    var src = File.new_for_uri (music.uri);
-                    yield src.copy_async (dst, FileCopyFlags.NONE);
+                if (!src.query_exists ()) {
+                    warning ("banger like: source missing %s", music.uri);
+                    toast (_("Can't like — file not found"));
+                    return;   // don't record a like with no file behind it
                 }
+                if (src.get_path () != dst.get_path ())
+                    yield src.copy_async (dst, FileCopyFlags.OVERWRITE);
             } catch (Error e) {
-                toast (e.message);
+                warning ("banger like: copy failed: %s", e.message);
+                toast (_("Couldn't add to library: %s").printf (e.message));
+                return;
             }
             yield set_label (music.uri, Rating.LIKE);
         }

@@ -187,7 +187,7 @@ namespace G4 {
         private void on_like_toggled () {
             if (_syncing_rating)
                 return;
-            unowned var music = ((Application) GLib.Application.get_default ()).current_music;
+            var music = ((Application) GLib.Application.get_default ()).current_music;
             if (music == null)
                 return;
             var banger = BangerService.instance;
@@ -204,7 +204,7 @@ namespace G4 {
         private void on_dislike_toggled () {
             if (_syncing_rating)
                 return;
-            unowned var music = ((Application) GLib.Application.get_default ()).current_music;
+            var music = ((Application) GLib.Application.get_default ()).current_music;
             if (music == null)
                 return;
             var banger = BangerService.instance;
