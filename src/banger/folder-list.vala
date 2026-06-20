@@ -30,15 +30,8 @@ namespace G4 {
                 entry.paintable = _placeholder;
                 entry.set_titles ((Music) item.item, sort_order);
             });
-            item_activated.connect ((position, obj) => {
-                // Play straight from THIS list (set it as the current list) instead of
-                // inserting into the main play queue. That keeps audition tracks out of
-                // the queue — and out of Artists/Albums, which group the queue.
-                _app.current_list = filter_model;
-                _app.current_item = (int) position;
-                if (!_app.player.playing)
-                    _app.player.play ();
-            });
+            // playback is wired by the owner (store-panel), which mirrors this list
+            // into the play queue so the Playing tab reflects it.
 
             BangerService.instance.lists_changed.connect (reload);
             map.connect (reload);

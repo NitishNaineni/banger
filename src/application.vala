@@ -375,6 +375,11 @@ namespace G4 {
         }
 
         public async void load_music_folder_async () {
+            // Rebuild the library model from the music folder so Artists/Albums reflect
+            // ONLY what's on disk there — a restored play queue (which may hold banger
+            // audition tracks) must not leak into the grouped views. The queue store
+            // itself is untouched.
+            _loader.remove_all ();
             var files = new File[] { File.new_for_uri (music_folder) };
             var musics = new GenericArray<Music> (4096);
             yield _loader.load_files_async (files, musics, false, false, _sort_mode);

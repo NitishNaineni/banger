@@ -84,8 +84,12 @@ namespace G4 {
             stack_view.add_titled (_main_list, PageName.PLAYING, _("Playing")).icon_name = "user-home-symbolic";
 
             // banger: Audition (current batch) + Library (likes) — self-contained tabs.
-            stack_view.add_titled (new AuditionPage (_app), PageName.AUDITION, _("Audition")).icon_name = "starred-symbolic";
-            stack_view.add_titled (new LibraryPage (_app), PageName.LIBRARY, _("Library")).icon_name = "emblem-favorite-symbolic";
+            var audition = new AuditionPage (_app);
+            audition.item_activated.connect ((pos, obj) => play_folder_list (audition, (int) pos));
+            stack_view.add_titled (audition, PageName.AUDITION, _("Audition")).icon_name = "starred-symbolic";
+            var library = new LibraryPage (_app);
+            library.item_activated.connect ((pos, obj) => play_folder_list (library, (int) pos));
+            stack_view.add_titled (library, PageName.LIBRARY, _("Library")).icon_name = "emblem-favorite-symbolic";
 
             _artist_list = create_artist_list ();
             _artist_stack.add (_artist_list, PageName.ARTIST);
@@ -679,6 +683,18 @@ namespace G4 {
             }
 
             _album_key_of_list = _current_list.music_node?.album_key;
+        }
+
+        // banger: play a self-contained Audition/Library list by making it THE play
+        // queue (so the Playing tab shows exactly what's playing) and riding the
+        // stable queue — re-scanning that tab on like/unlike won't disturb playback.
+        private void play_folder_list (MusicList list, int index) {
+            var playlist = list.get_as_playlist ();
+            _app.music_queue.splice (0, _app.music_queue.get_n_items (), (Object[]) playlist.items.data);
+            _app.current_list = _main_list.filter_model;
+            _app.current_item = index;
+            if (!_app.player.playing)
+                _app.player.play ();
         }
 
         private void pop_page_without_animation (Stack stack) {
