@@ -67,8 +67,9 @@ stable spots. After `git merge upstream/master`, re-apply only if these conflict
 | `src/meson.build` | add the `banger/*.vala` files to `sources` |
 | `src/gresource.xml` | add the two `thumbs-*-symbolic.svg` icons |
 | `src/ui/music-widgets.vala` | `PageName.AUDITION` + `PageName.LIBRARY` constants |
-| `src/ui/store-panel.vala` | register Audition/Library tabs (drop the Playlists tab); sort button for Library |
-| `src/application.vala` | `notify_library_changed()` (queue-free library-view refresh) |
+| `src/ui/store-panel.vala` | register Audition/Library tabs (drop the Playlists tab); unified `play_list_as_queue`; per-tab sort routing |
+| `src/application.vala` | `notify_library_changed()` (queue-free refresh); `sort_requested` signal (per-tab sort); `load_music_folder_async` rebuilds the library model |
+| `data/app.gschema.xml` | `library-sort` + `audition-sort` keys (independent per-tab sort) |
 | `src/ui/play-bar.vala` | the 👍/👎 toggles + `music_changed`/`labels_changed` sync |
 
 ## Build & run (native)

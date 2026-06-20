@@ -18,10 +18,13 @@ namespace G4 {
 
         public signal void reloaded (uint count);
 
-        public FolderList (Application app, File folder) {
+        public FolderList (Application app, File folder, string sort_key) {
             base (app, typeof (Music), null, false);
             this.folder = folder;
             _placeholder = app.thumbnailer.create_simple_text_paintable ("...", Thumbnailer.ICON_SIZE);
+            // each tab keeps its OWN sort, persisted in its own setting
+            sort_order = app.settings.get_uint (sort_key);
+            app.settings.bind (sort_key, this, "list-sort", SettingsBindFlags.DEFAULT);
 
             item_binded.connect ((item) => {
                 var entry = (MusicEntry) item.child;
@@ -78,6 +81,13 @@ namespace G4 {
             data_store.splice (0, data_store.get_n_items (), (Object[]) found.data);
             _loading = false;
             reloaded (found.length);
+        }
+
+        // bound to the tab's sort setting; the store-panel sets this when the user
+        // picks a sort while viewing this tab.
+        public uint list_sort {
+            get { return sort_order; }
+            set { set_sort_order (value); }
         }
 
         public void set_sort_order (uint mode) {

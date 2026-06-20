@@ -139,6 +139,16 @@ namespace G4 {
             app.music_library_changed.connect (on_music_library_changed);
             app.playlist_added.connect (on_playlist_added);
             app.thumbnail_changed.connect (on_thumbnail_changed);
+            // banger: a self-contained tab (Library/Audition) sorts itself; only the
+            // Playing tab falls through to sorting the play queue.
+            app.sort_requested.connect ((mode) => {
+                if (_current_list is FolderList) {
+                    ((FolderList) _current_list).list_sort = mode;
+                    update_sort_icon ();
+                    return true;
+                }
+                return false;
+            });
 
             var settings = app.settings;
             settings.bind ("sort-mode", this, "sort-mode", SettingsBindFlags.DEFAULT);
@@ -175,6 +185,15 @@ namespace G4 {
             }
         }
 
+        // banger: show the VISIBLE list's own sort on the button + menu radio. The
+        // Playing tab uses the queue's sort; Library/Audition use their own.
+        private void update_sort_icon () {
+            var mode = (_current_list is FolderList) ? ((FolderList) _current_list).list_sort : _sort_mode;
+            if (mode < SORT_MODE_ICONS.length)
+                sort_btn.set_icon_name (SORT_MODE_ICONS[mode]);
+            (_app.lookup_action (ACTION_SORT) as SimpleAction)?.set_state (new Variant.string (mode.to_string ()));
+        }
+
         public Gtk.Widget visible_child {
             set {
                 if (_size_allocated) {
@@ -190,7 +209,8 @@ namespace G4 {
                 if (value is MusicList) {
                     var list = _current_list = (MusicList) value;
                     indicator.visible = _current_list.modified;
-                    sort_btn.visible = _current_list == _main_list || _current_list is LibraryPage;
+                    sort_btn.visible = _current_list == _main_list || _current_list is FolderList;
+                    update_sort_icon ();
                     _search_mode = SearchMode.ANY;
                     on_search_btn_toggled ();
 

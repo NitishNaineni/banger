@@ -290,6 +290,11 @@ namespace G4 {
 
         public bool single_loop { get; set; }
 
+        // A visible view can claim a sort selection (return true) to sort ITSELF
+        // (e.g. the banger Library/Audition tabs keep independent sort orders);
+        // otherwise the play queue is sorted, as before.
+        public signal bool sort_requested (uint mode);
+
         public uint sort_mode {
             get {
                 return _sort_mode;
@@ -299,6 +304,8 @@ namespace G4 {
                 var state = new Variant.string (value.to_string ());
                 (action as SimpleAction)?.set_state (state);
 
+                if (sort_requested (value))
+                    return;
                 if (_sort_mode != value) {
                     _sort_mode = value;
                     sort_music_store ((ListStore) _music_queue, value);

@@ -15,8 +15,7 @@ namespace G4 {
         private int64 _start = 0;
 
         public AuditionPage (Application app) {
-            base (app, File.new_build_filename (Environment.get_home_dir (), "Music", "audition"));
-            sort_order = SortMode.TITLE;
+            base (app, File.new_build_filename (Environment.get_home_dir (), "Music", "audition"), "audition-sort");
 
             var header = new Gtk.Box (Gtk.Orientation.VERTICAL, 4);
             header.add_css_class ("toolbar");

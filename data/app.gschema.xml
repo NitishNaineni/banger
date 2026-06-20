@@ -73,6 +73,16 @@
       <default>3</default>
       <summary>Sort Mode</summary>
     </key>
+    <key name="library-sort" type="u">
+      <range min="0" max="5"/>
+      <default>1</default>
+      <summary>banger: Library tab sort mode</summary>
+    </key>
+    <key name="audition-sort" type="u">
+      <range min="0" max="5"/>
+      <default>4</default>
+      <summary>banger: Audition tab sort mode</summary>
+    </key>
     <key name="leaflet-mode" type="i">
       <default>0</default>
     </key>
