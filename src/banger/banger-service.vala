@@ -47,9 +47,9 @@ namespace G4 {
 
         // basename -> rating cache changed; play-bar re-syncs its toggles.
         public signal void labels_changed ();
-        // progress during refresh (): a message and a fraction in [0,1], or
-        // fraction < 0 for an indeterminate phase.
-        public signal void refresh_progress (string message, double fraction);
+        // progress during refresh (): a message plus done/total (both 0 for an
+        // indeterminate phase like "Clearing audition…").
+        public signal void refresh_progress (string message, int done, int total);
 
         construct {
             _home = resolve_home ();
@@ -235,12 +235,8 @@ namespace G4 {
                 while ((line = yield stream.read_line_async ()) != null) {
                     var f = ((!) line).split ("\t");
                     if (f[0] == "progress" && f.length >= 2) {
-                        double frac = -1;
-                        if (f.length >= 4) {
-                            var total = double.parse (f[3]);
-                            if (total > 0)
-                                frac = double.parse (f[2]) / total;
-                        }
+                        int done = f.length >= 3 ? int.parse (f[2]) : 0;
+                        int total = f.length >= 4 ? int.parse (f[3]) : 0;
                         // load the just-downloaded track so it shows up immediately
                         // (one at a time -> no concurrent-add race)
                         if (f.length >= 5 && f[4].length > 0) {
@@ -248,7 +244,7 @@ namespace G4 {
                             if (app != null)
                                 yield ((!) app).loader.on_file_added (File.new_for_uri (f[4]));
                         }
-                        refresh_progress (f[1], frac);
+                        refresh_progress (f[1], done, total);
                     } else if (f[0] == "ok") {
                         ok = f.length > 1 && f[1] == "true";
                     } else if (f[0] == "error" && f.length > 1) {

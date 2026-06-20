@@ -148,9 +148,9 @@ def cmd_refresh():
         if len(parts) == 5 and parts[0] == "DL":
             done, total, saved, desc = parts[1], parts[2], parts[3], parts[4]
             uri = pathlib.Path(saved).as_uri() if saved else ""
-            # progress\t<message>\t<done>\t<total>\t<file uri> — uri lets the app
-            # load each track the moment it lands.
-            _line("progress", f"Downloading {done}/{total}: {desc}", done, total, uri)
+            # progress\t<track>\t<done>\t<total>\t<file uri> — the app formats the
+            # "n/total · ETA" line itself; uri lets it load each track as it lands.
+            _line("progress", desc, done, total, uri)
     rc = proc.wait()
     write_m3u("Audition", AUDITION)
     write_m3u("Library", LIBRARY)
