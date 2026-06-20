@@ -10,10 +10,13 @@ namespace G4 {
         private Gtk.Button _play = new Gtk.Button ();
         private Gtk.Button _next = new Gtk.Button ();
         private VolumeButton _volume = new VolumeButton ();
+        private Gtk.ToggleButton _like = new Gtk.ToggleButton ();
+        private Gtk.ToggleButton _dislike = new Gtk.ToggleButton ();
         private int _duration = 0;
         private int _position = 0;
         private bool _remain_progress = false;
         private bool _seeking = false;
+        private bool _syncing_rating = false;
 
         public signal void position_seeked (double position);
 
@@ -59,11 +62,13 @@ namespace G4 {
             var buttons = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 16);
             buttons.halign = Gtk.Align.CENTER;
             buttons.margin_top = 16;
+            buttons.append (_dislike);
             buttons.append (_repeat);
             buttons.append (_prev);
             buttons.append (_play);
             buttons.append (_next);
             buttons.append (_volume);
+            buttons.append (_like);
             append (buttons);
 
             _repeat.icon_name = "media-playlist-repeat-symbolic";
@@ -75,6 +80,30 @@ namespace G4 {
                 _repeat.icon_name = _repeat.active ? "media-playlist-repeat-song-symbolic" : "media-playlist-repeat-symbolic";
                 app.single_loop = ! app.single_loop;
             });
+
+            // banger: Like (👍) / Dislike (👎) the current track. Like copies it to
+            // the library; dislike just records it. Mutually exclusive toggles.
+            var banger = BangerService.instance;
+            _dislike.icon_name = "thumbs-down-symbolic";
+            _dislike.valign = Gtk.Align.CENTER;
+            _dislike.tooltip_text = _("Dislike");
+            _dislike.add_css_class ("flat");
+            _dislike.toggled.connect (on_dislike_toggled);
+
+            _like.icon_name = "thumbs-up-symbolic";
+            _like.valign = Gtk.Align.CENTER;
+            _like.tooltip_text = _("Like");
+            _like.add_css_class ("flat");
+            _like.toggled.connect (on_like_toggled);
+
+            if (!banger.available) {
+                _like.visible = false;
+                _dislike.visible = false;
+            } else {
+                app.music_changed.connect (sync_rating);
+                banger.labels_changed.connect (() => sync_rating (app.current_music));
+                banger.load_labels.begin ((obj, res) => banger.load_labels.end (res));
+            }
 
             _prev.valign = Gtk.Align.CENTER;
             _prev.action_name = ACTION_APP + ACTION_PREV;
@@ -152,6 +181,55 @@ namespace G4 {
         private void on_state_changed (Gst.State state) {
             var playing = state == Gst.State.PLAYING;
             _play.icon_name = playing ? "media-playback-pause-symbolic" : "media-playback-start-symbolic";
+        }
+
+        private void on_like_toggled () {
+            if (_syncing_rating)
+                return;
+            unowned var music = ((Application) GLib.Application.get_default ()).current_music;
+            if (music == null)
+                return;
+            var banger = BangerService.instance;
+            if (_like.active) {
+                _syncing_rating = true;
+                _dislike.active = false;
+                _syncing_rating = false;
+                banger.like.begin ((!) music, (obj, res) => banger.like.end (res));
+            } else {
+                banger.unlike.begin ((!) music, (obj, res) => banger.unlike.end (res));
+            }
+        }
+
+        private void on_dislike_toggled () {
+            if (_syncing_rating)
+                return;
+            unowned var music = ((Application) GLib.Application.get_default ()).current_music;
+            if (music == null)
+                return;
+            var banger = BangerService.instance;
+            if (_dislike.active) {
+                _syncing_rating = true;
+                _like.active = false;
+                _syncing_rating = false;
+                banger.dislike.begin ((!) music, (obj, res) => banger.dislike.end (res));
+            } else {
+                banger.set_label.begin (((!) music).uri, Rating.NONE, (obj, res) => banger.set_label.end (res));
+            }
+        }
+
+        // Reflect the current track's stored rating on the toggles (without firing
+        // the toggled handlers).
+        private void sync_rating (Music? music) {
+            _syncing_rating = true;
+            if (music != null) {
+                var r = BangerService.instance.rating_for (((!) music).uri);
+                _like.active = (r == Rating.LIKE);
+                _dislike.active = (r == Rating.DISLIKE);
+            } else {
+                _like.active = false;
+                _dislike.active = false;
+            }
+            _syncing_rating = false;
         }
 
         private void setup_seek_bar (GstPlayer player) {
