@@ -14,19 +14,28 @@ namespace G4 {
         protected uint sort_order = SortMode.TITLE;
         private HashTable<string, Music> _cache = new HashTable<string, Music> (str_hash, str_equal);
         private bool _loading = false;
+        private Gdk.Paintable _placeholder;
 
         public signal void reloaded (uint count);
 
         public FolderList (Application app, File folder) {
             base (app, typeof (Music), null, false);
             this.folder = folder;
+            _placeholder = app.thumbnailer.create_simple_text_paintable ("...", Thumbnailer.ICON_SIZE);
 
             item_binded.connect ((item) => {
-                ((MusicEntry) item.child).set_titles ((Music) item.item, sort_order);
+                var entry = (MusicEntry) item.child;
+                // give the cover a placeholder so its first draw fires and the real
+                // album art lazy-loads (matches the built-in lists).
+                entry.paintable = _placeholder;
+                entry.set_titles ((Music) item.item, sort_order);
             });
             item_activated.connect ((position, obj) => {
-                var playlist = get_as_playlist ();
-                _app.current_item = _app.insert_after_current (playlist) + (int) position;
+                // Play straight from THIS list (set it as the current list) instead of
+                // inserting into the main play queue. That keeps audition tracks out of
+                // the queue — and out of Artists/Albums, which group the queue.
+                _app.current_list = filter_model;
+                _app.current_item = (int) position;
                 if (!_app.player.playing)
                     _app.player.play ();
             });
