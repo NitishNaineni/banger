@@ -1,10 +1,13 @@
 /*
  * banger — the Audition page.
  *
- * A self-contained MusicList that lists the current audition batch (the tracks
- * in ~/Music/audition) and plays them. Its header is a single row: a Refresh
- * icon and, beside it, the batch number — replaced by an inline progress bar
- * while a refresh runs. Like/dislike happen on the play bar.
+ * A self-contained MusicList that lists the current audition batch. It scans
+ * ~/Music/audition itself (the app's library is pointed at ~/Music/library, so
+ * audition tracks never appear in Albums/Artists/Playlists) — liking a track
+ * copies it into the library, where it then shows up everywhere.
+ *
+ * Header: a Refresh icon and the batch number, the number replaced by an inline
+ * progress bar while a refresh runs.
  */
 namespace G4 {
 
@@ -12,12 +15,13 @@ namespace G4 {
         private Gtk.Button _refresh_btn = new Gtk.Button.from_icon_name ("view-refresh-symbolic");
         private Gtk.Label _batch = new Gtk.Label ("");
         private Gtk.ProgressBar _progress = new Gtk.ProgressBar ();
-        private string _audition_uri;
+        private File _audition_dir;
+        private HashTable<string, Music> _cache = new HashTable<string, Music> (str_hash, str_equal);
+        private bool _loading = false;
 
         public AuditionPage (Application app) {
             base (app, typeof (Music), null, false);
-            _audition_uri = File.new_build_filename (
-                Environment.get_home_dir (), "Music", "audition").get_uri () + "/";
+            _audition_dir = File.new_build_filename (Environment.get_home_dir (), "Music", "audition");
 
             // Header row: [Refresh icon]  [batch number | progress bar].
             var bar = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
@@ -48,22 +52,48 @@ namespace G4 {
 
             if (!BangerService.instance.available)
                 _refresh_btn.sensitive = false;
-            _app.music_library_changed.connect ((external) => reload ());
             map.connect (() => reload ());
         }
 
-        // Repopulate the list from the tracks currently under ~/Music/audition.
+        // Scan ~/Music/audition (off the main thread) and show its tracks.
         private void reload () {
-            var queue = _app.music_queue;
-            var items = new GenericArray<Music> ();
-            var n = queue.get_n_items ();
-            for (uint i = 0; i < n; i++) {
-                var m = (Music) queue.get_item (i);
-                if (m.uri.has_prefix (_audition_uri))
-                    items.add (m);
-            }
-            items.sort ((a, b) => strcmp (a.uri, b.uri));
-            data_store.splice (0, data_store.get_n_items (), (Object[]) items.data);
+            if (!_loading)
+                load_audition.begin ((obj, res) => load_audition.end (res));
+        }
+
+        private async void load_audition () {
+            _loading = true;
+            var found = new GenericArray<Music> ();
+            var dir = _audition_dir;
+            var cache = _cache;
+            yield run_void_async (() => {
+                try {
+                    var e = dir.enumerate_children (
+                        "standard::name,standard::content-type,time::modified",
+                        FileQueryInfoFlags.NONE);
+                    FileInfo? info = null;
+                    while ((info = e.next_file ()) != null) {
+                        unowned var ctype = ((!) info).get_content_type () ?? "";
+                        if (!is_music_type (ctype))
+                            continue;
+                        var file = dir.get_child (((!) info).get_name ());
+                        var uri = file.get_uri ();
+                        Music? m = cache.get (uri);
+                        if (m == null) {
+                            var time = ((!) info).get_modification_date_time ()?.to_unix () ?? 0;
+                            var music = new Music (uri, ((!) info).get_name (), time);
+                            music.parse_tags ();
+                            cache.set (uri, music);
+                            m = music;
+                        }
+                        found.add ((!) m);
+                    }
+                } catch (Error e) {
+                }
+            });
+            found.sort ((a, b) => strcmp (a.uri, b.uri));
+            data_store.splice (0, data_store.get_n_items (), (Object[]) found.data);
+            _loading = false;
             update_status ();
         }
 
@@ -96,7 +126,8 @@ namespace G4 {
                 _progress.visible = false;
                 _batch.visible = true;
                 _refresh_btn.sensitive = true;
-                _app.reload_library ();   // single-threaded rescan -> reload ()
+                _cache.remove_all ();   // new batch -> parse fresh
+                reload ();
                 update_status ();
             });
         }
