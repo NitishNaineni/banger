@@ -44,6 +44,7 @@ namespace G4 {
         private HashTable<string, string> _labels = new HashTable<string, string> (str_hash, str_equal);
 
         private File _library = File.new_build_filename (Environment.get_home_dir (), "Music", "library");
+        private File _audition = File.new_build_filename (Environment.get_home_dir (), "Music", "audition");
 
         // basename -> rating cache changed; play-bar re-syncs its toggles.
         public signal void labels_changed ();
@@ -167,18 +168,25 @@ namespace G4 {
         }
 
         public async void like (Music music) {
-            var src = File.new_for_uri (music.uri);
-            var dst = _library.get_child (basename_of (music.uri));
+            var name = basename_of (music.uri);
+            var dst = _library.get_child (name);
             try {
                 if (!_library.query_exists ())
                     _library.make_directory_with_parents ();
-                if (!src.query_exists ()) {
-                    warning ("banger like: source missing %s", music.uri);
-                    toast (_("Can't like — file not found"));
-                    return;   // don't record a like with no file behind it
-                }
-                if (src.get_path () != dst.get_path ())
+                if (!dst.query_exists ()) {
+                    // Copy from the audition source — it persists even when you're
+                    // playing (and just deleted) the library copy. Fall back to the
+                    // currently playing file if the audition copy is gone.
+                    File src = _audition.get_child (name);
+                    if (!src.query_exists ())
+                        src = File.new_for_uri (music.uri);
+                    if (!src.query_exists () || src.get_path () == dst.get_path ()) {
+                        warning ("banger like: no source for %s", name);
+                        toast (_("Can't like — the audition file is gone"));
+                        return;
+                    }
                     yield src.copy_async (dst, FileCopyFlags.OVERWRITE);
+                }
             } catch (Error e) {
                 warning ("banger like: copy failed: %s", e.message);
                 toast (_("Couldn't add to library: %s").printf (e.message));
