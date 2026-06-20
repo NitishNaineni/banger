@@ -399,6 +399,33 @@ namespace G4 {
                     _artists.foreach_remove ((name, artist) => artist.remove_music (music) && artist.length == 0);
                 }
             }
+
+            // Also drop it from any playlist that lists it (by URI), so playlist
+            // views update when a file is removed.
+            lock (_playlists) {
+                _playlists.foreach ((key, playlist) => {
+                    unowned var items = playlist.items;
+                    for (var i = (int) items.length - 1; i >= 0; i--) {
+                        if (items[i].uri == music.uri)
+                            items.remove_index (i);
+                    }
+                });
+            }
+        }
+
+        // Add a track to a playlist's items in-place (no duplicates), so a newly
+        // added file shows in that playlist view without a full reload.
+        public void add_to_playlist (string list_uri, Music music) {
+            lock (_playlists) {
+                Playlist? playlist = _playlists[list_uri];
+                if (playlist == null)
+                    return;
+                foreach (unowned var m in ((!) playlist).items) {
+                    if (m.uri == music.uri)
+                        return;
+                }
+                ((!) playlist).items.add (music);
+            }
         }
 
         public bool remove_playlist (string key) {

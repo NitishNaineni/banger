@@ -45,6 +45,8 @@ namespace G4 {
 
         private File _library = File.new_build_filename (Environment.get_home_dir (), "Music", "library");
         private File _audition = File.new_build_filename (Environment.get_home_dir (), "Music", "audition");
+        private string _library_m3u = File.new_build_filename (Environment.get_home_dir (), "Music", "Playlists", "Library.m3u").get_uri ();
+        private string _audition_m3u = File.new_build_filename (Environment.get_home_dir (), "Music", "Playlists", "Audition.m3u").get_uri ();
 
         // basename -> rating cache changed; play-bar re-syncs its toggles.
         public signal void labels_changed ();
@@ -160,11 +162,18 @@ namespace G4 {
             } catch (Error e) {
                 warning ("banger label: %s", e.message);
             }
-            // the sidecar regenerated Audition.m3u/Library.m3u — reload so the
-            // copied/removed track and the playlists update across the app.
+        }
+
+        // Load a file into the app's library views (albums/artists/queue) and add
+        // it to the given playlist node, so it appears live without a full reload.
+        private async void load_into_views (File file, string playlist_uri) {
             var app = GLib.Application.get_default () as Application;
-            if (app != null)
-                ((!) app).reload_library ();
+            if (app == null)
+                return;
+            yield ((!) app).loader.on_file_added (file);
+            var music = ((!) app).loader.find_cache (file.get_uri ());
+            if (music != null)
+                ((!) app).loader.library.add_to_playlist (playlist_uri, (!) music);
         }
 
         public async void like (Music music) {
@@ -187,6 +196,7 @@ namespace G4 {
                     }
                     yield src.copy_async (dst, FileCopyFlags.OVERWRITE);
                 }
+                yield load_into_views (dst, _library_m3u);   // show it in the library + Library playlist
             } catch (Error e) {
                 warning ("banger like: copy failed: %s", e.message);
                 toast (_("Couldn't add to library: %s").printf (e.message));
@@ -215,11 +225,18 @@ namespace G4 {
             if (!lib.query_exists ())
                 return;
             var aud = _audition.get_child (name);
+            var app = GLib.Application.get_default () as Application;
             try {
-                if (aud.query_exists ())
+                if (aud.query_exists ()) {
                     yield lib.delete_async ();
-                else
-                    lib.move (aud, FileCopyFlags.NONE);   // same filesystem -> instant rename
+                    if (app != null)
+                        yield ((!) app).loader.on_file_removed (lib);   // drop from views + playlists
+                } else {
+                    lib.move (aud, FileCopyFlags.NONE);                 // old batch -> back to audition
+                    if (app != null)
+                        yield ((!) app).loader.on_file_removed (lib);
+                    yield load_into_views (aud, _audition_m3u);         // show it back in audition
+                }
             } catch (Error e) {
                 toast (e.message);
             }
