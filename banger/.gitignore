@@ -1,0 +1,16 @@
+# secrets — never commit
+config.toml
+
+# local database + audio scratch
+data/*.db
+data/*.db-*
+*.flac
+*.mp3
+*.m4a
+audition/
+
+# python / uv
+__pycache__/
+*.pyc
+.venv/
+venv/

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# banger — crate-dig for music you'll actually keep.
+#  banger            run a loop turn (process culls -> next batch -> download)
+#  banger --dry-run  show the steps, change nothing
+#  banger status     pretty summary of pipeline state
+#  banger batch      just generate the next batch
+#  banger help
+set -euo pipefail
+
+# project dir = the dir holding this script (resolve through the ~/.local/bin symlink)
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+PROJECT="$(dirname "$SELF")"
+
+if [ $# -eq 0 ]; then
+  script=cycle.py                      # no args -> run a loop turn
+else
+  case "$1" in
+    status)  script=status.py;     shift ;;
+    batch)   script=make_batch.py; shift ;;
+    cycle)   script=cycle.py;      shift ;;
+    -h|--help|help)
+      grep '^#  ' "$SELF" | sed 's/^# //'; exit 0 ;;
+    *)       script=cycle.py ;;        # passthrough (e.g. --dry-run), keep the arg
+  esac
+fi
+
+exec uv run --project "$PROJECT" python "$PROJECT/scripts/$script" "$@"

@@ -1,0 +1,14 @@
+[project]
+name = "music-discovery"
+version = "0.1.0"
+description = "Personal active-learning music discovery loop (ListenBrainz/Troi -> Deezer)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "troi",        # ListenBrainz/Troi recommendation engine (LB Radio)
+    "streamrip>=2.1",  # Deezer/Tidal/Qobuz downloader CLI
+    "rich>=13",    # pretty/live terminal output
+]
+
+[tool.uv]
+# managed environment lives in .venv (default)

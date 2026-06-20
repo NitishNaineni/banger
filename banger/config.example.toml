@@ -1,0 +1,12 @@
+# Copy to config.toml and fill in. config.toml is gitignored — keep secrets out of git.
+
+[deezer]
+# Your Deezer HiFi account ARL cookie (used by streamrip to download lossless).
+# streamrip stores this in its own config; this is just a reference copy.
+arl = ""
+quality = "flac"   # 16-bit/44.1kHz CD-quality FLAC
+
+[listenbrainz]
+# User token from https://listenbrainz.org/settings/
+token = ""
+username = ""
