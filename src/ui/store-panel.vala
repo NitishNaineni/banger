@@ -98,8 +98,8 @@ namespace G4 {
             _playlist_stack.bind_property ("visible-child", this, "visible-child");
             stack_view.add_titled (_playlist_stack.widget, PageName.PLAYLIST, _("Playlists")).icon_name = "view-list-symbolic";
 
-            // banger: the Discover/Audition page (batch status + Refresh button)
-            stack_view.add_titled (new DiscoverPage (_app), PageName.DISCOVER, _("Discover")).icon_name = "starred-symbolic";
+            // banger: the Audition page (current batch list + Refresh button)
+            stack_view.add_titled (new AuditionPage (_app), PageName.AUDITION, _("Audition")).icon_name = "starred-symbolic";
 
             stack_view.transition_type = Gtk.StackTransitionType.SLIDE_LEFT_RIGHT;
             stack_view.bind_property ("visible-child", this, "visible-child");

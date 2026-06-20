@@ -16,7 +16,7 @@ Usage:
 """
 import argparse, json, os, random, time, urllib.error, urllib.request
 import db
-from _paths import AUDITION, LIBRARY, load_config, write_m3u
+from _paths import AUDITION, LIBRARY, audio_files, load_config, write_m3u
 from _ui import ok, info
 
 LB_FEEDBACK = "https://api.listenbrainz.org/1/feedback/recording-feedback"
@@ -91,7 +91,7 @@ def main():
 
     sent, skip = send_feedback(con, changes)
     con.commit()
-    na = write_m3u("Audition", AUDITION)
+    na = len(audio_files(AUDITION))   # audition is the app's Audition tab, not a playlist
     nl = write_m3u("Library", LIBRARY)
 
     ok(f"[green]{likes}[/] liked  ·  [yellow]{dislikes}[/] disliked  ·  "

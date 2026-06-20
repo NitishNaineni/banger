@@ -14,9 +14,10 @@ upstream.
   - **Dislike** records it (ListenBrainz *hated*, −1); the file stays in audition.
   - Neither = undecided. The toggles are mutually exclusive and reflect each track's
     saved rating as you play.
-- **A Discover page** with a **Refresh** button: "I'm done with this batch" clears the
-  audition folder and downloads the next batch (generated from your taste). Shows
-  batch number, liked/disliked counts and a taste summary.
+- **An Audition page** — a playable track list of the current batch, with a **Refresh**
+  button ("done with this batch"): it clears the audition folder and downloads the next
+  batch (generated from your taste), showing a live progress bar. Audition is this tab,
+  not an `.m3u` playlist.
 
 The discovery logic (ListenBrainz/troi for recommendations, streamrip+Deezer for
 downloads, SQLite for state) is the **bundled Python pipeline** under `banger/`. The
@@ -27,7 +28,7 @@ app drives it; it never reimplements it.
 ```
 src/banger/                         all the Vala glue (isolated, new files)
   banger-service.vala   runs the sidecar via `uv run`, label cache, like/dislike, refresh
-  discover-page.vala    the Discover page (status + Refresh)
+  audition-page.vala    the Audition page (track list + Refresh)
 banger/                             the bundled Python pipeline (copied from the standalone repo)
   scripts/banger_api.py   tab-separated facade the app calls: status / labels / label / refresh
   scripts/*.py            make_batch, download_batch, capture_labels, db, _paths
@@ -53,10 +54,10 @@ stable spots. After `git merge upstream/master`, re-apply only if these conflict
 | File | Edit |
 |---|---|
 | `meson.build` | `install_subdir('banger', …)` |
-| `src/meson.build` | add `banger/banger-service.vala`, `banger/discover-page.vala` to `sources` |
+| `src/meson.build` | add `banger/banger-service.vala`, `banger/audition-page.vala` to `sources` |
 | `src/gresource.xml` | add the two `thumbs-*-symbolic.svg` icons |
-| `src/ui/music-widgets.vala` | `PageName.DISCOVER` constant |
-| `src/ui/store-panel.vala` | one `add_titled(new DiscoverPage(_app), …)` line |
+| `src/ui/music-widgets.vala` | `PageName.AUDITION` constant |
+| `src/ui/store-panel.vala` | one `add_titled(new AuditionPage(_app), …)` line |
 | `src/ui/play-bar.vala` | the 👍/👎 toggles + `music_changed`/`labels_changed` sync |
 
 ## Build & run (native)

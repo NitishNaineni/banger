@@ -73,33 +73,52 @@ def run(con, n, rip):
     os.makedirs(AUDITION, exist_ok=True)
     rows = db.batch_tracks(con, n)
 
-    with console.status(f"[cyan]resolving {len(rows)} tracks on Deezer…"):
+    total = len(rows)
+    # When driven by the app, emit machine-readable "DL\t<i>\t<n>\t<desc>" lines
+    # (so it can show a real progress bar) instead of the rich CLI bar.
+    prog_mode = bool(os.environ.get("BANGER_PROGRESS"))
+
+    if prog_mode:
+        print(f"DL\t0\t{total}\tResolving on Deezer…", flush=True)
         resolved = resolve_all(rows)
+    else:
+        with console.status(f"[cyan]resolving {total} tracks on Deezer…"):
+            resolved = resolve_all(rows)
 
     n_ok = unmatched = fail = 0
-    with download_progress() as prog:                 # downloads stay serial (ban-safe)
-        task = prog.add_task("starting…", total=len(rows))
-        for r in rows:
-            prog.update(task, description=f"{r['artist']} – {r['title']}"[:42])
-            did = resolved.get(r["id"], "")
-            if not did:
-                unmatched += 1
-                db.set_download(con, r["id"], "", "")
-                prog.advance(task); continue
-            before = set(audio_files(AUDITION))
-            # --no-db: ignore streamrip's own download-history (we dedup via our DB;
-            # otherwise streamrip skips anything downloaded in a past session).
-            subprocess.run([rip, "--no-db", "--folder", AUDITION, "id", "deezer", "track", did],
-                           capture_output=True)
-            new_files = sorted(set(audio_files(AUDITION)) - before)
-            saved = new_files[0] if new_files else ""
-            n_ok += bool(saved); fail += not saved
-            db.set_download(con, r["id"], did, saved)
-            prog.advance(task)
+
+    def _one(r):
+        nonlocal n_ok, unmatched, fail
+        did = resolved.get(r["id"], "")
+        if not did:
+            unmatched += 1
+            db.set_download(con, r["id"], "", "")
+            return
+        before = set(audio_files(AUDITION))
+        # --no-db: ignore streamrip's own download-history (we dedup via our DB;
+        # otherwise streamrip skips anything downloaded in a past session).
+        subprocess.run([rip, "--no-db", "--folder", AUDITION, "id", "deezer", "track", did],
+                       capture_output=True)
+        saved = (sorted(set(audio_files(AUDITION)) - before) or [""])[0]
+        n_ok += bool(saved); fail += not saved
+        db.set_download(con, r["id"], did, saved)
+
+    if prog_mode:
+        for i, r in enumerate(rows, 1):
+            _one(r)
+            print(f"DL\t{i}\t{total}\t{r['artist']} - {r['title']}", flush=True)
+    else:                                             # downloads stay serial (ban-safe)
+        with download_progress() as prog:
+            task = prog.add_task("starting…", total=total)
+            for r in rows:
+                prog.update(task, description=f"{r['artist']} – {r['title']}"[:42])
+                _one(r)
+                prog.advance(task)
+
     db.mark_downloaded(con, n)
     con.commit()
-    write_m3u("Audition", AUDITION)
-    ok(f"[green]{n_ok}[/] downloaded  ·  [yellow]{unmatched}[/] no match  ·  [red]{fail}[/] failed")
+    if not prog_mode:
+        ok(f"[green]{n_ok}[/] downloaded  ·  [yellow]{unmatched}[/] no match  ·  [red]{fail}[/] failed")
 
 
 def main():

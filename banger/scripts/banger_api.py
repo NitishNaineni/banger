@@ -117,14 +117,15 @@ def cmd_label(con, path, rating):
 
 def cmd_refresh():
     # "I'm done with this batch" -> clear audition, generate + download the next batch.
-    _line("progress", "clear", "Clearing audition…")
+    # Progress lines: progress\t<message>\t<done>\t<total>  (done/total optional).
+    _line("progress", "Clearing audition…")
     for f in audio_files(AUDITION):
         try:
             os.remove(f)
         except OSError:
             pass
 
-    _line("progress", "batch", "Generating next batch…")
+    _line("progress", "Generating next batch…")
     mk = subprocess.run([sys.executable, os.path.join(SCRIPTS, "make_batch.py")],
                         capture_output=True, text=True)
     con = db.connect()
@@ -136,17 +137,23 @@ def cmd_refresh():
         _line("error", (mk.stderr or "make_batch failed").strip()[-400:])
         return
 
-    _line("progress", "download", f"Downloading batch #{n}…")
-    dl = subprocess.run([sys.executable, os.path.join(SCRIPTS, "download_batch.py"), str(n)],
-                        capture_output=True, text=True)
-    write_m3u("Audition", AUDITION)
-    write_m3u("Library", LIBRARY)
+    # stream per-track download progress from download_batch (BANGER_PROGRESS mode)
+    env = dict(os.environ)
+    env["BANGER_PROGRESS"] = "1"
+    proc = subprocess.Popen(
+        [sys.executable, os.path.join(SCRIPTS, "download_batch.py"), str(n)],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
+    for raw in proc.stdout:
+        parts = raw.rstrip("\n").split("\t", 3)
+        if len(parts) == 4 and parts[0] == "DL":
+            done, total, desc = parts[1], parts[2], parts[3]
+            _line("progress", f"Downloading {done}/{total}: {desc}", done, total)
+    rc = proc.wait()
+    write_m3u("Library", LIBRARY)   # audition is the Audition tab now, not a playlist
     con.close()
-    _line("ok", dl.returncode == 0)
+    _line("ok", rc == 0)
     _line("batch_number", n)
     _line("audition_count", len(audio_files(AUDITION)))
-    if dl.returncode != 0:
-        _line("error", (dl.stderr or "download failed").strip()[-400:])
 
 
 def main():

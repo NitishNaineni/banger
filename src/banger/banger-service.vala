@@ -47,8 +47,9 @@ namespace G4 {
 
         // basename -> rating cache changed; play-bar re-syncs its toggles.
         public signal void labels_changed ();
-        // a human-readable progress line emitted during refresh ().
-        public signal void refresh_progress (string message);
+        // progress during refresh (): a message and a fraction in [0,1], or
+        // fraction < 0 for an indeterminate phase.
+        public signal void refresh_progress (string message, double fraction);
 
         construct {
             _home = resolve_home ();
@@ -233,12 +234,19 @@ namespace G4 {
                 string? line = null;
                 while ((line = yield stream.read_line_async ()) != null) {
                     var f = ((!) line).split ("\t");
-                    if (f[0] == "progress" && f.length >= 3)
-                        refresh_progress (f[2]);
-                    else if (f[0] == "ok")
+                    if (f[0] == "progress" && f.length >= 2) {
+                        double frac = -1;
+                        if (f.length >= 4) {
+                            var total = double.parse (f[3]);
+                            if (total > 0)
+                                frac = double.parse (f[2]) / total;
+                        }
+                        refresh_progress (f[1], frac);
+                    } else if (f[0] == "ok") {
                         ok = f.length > 1 && f[1] == "true";
-                    else if (f[0] == "error" && f.length > 1)
+                    } else if (f[0] == "error" && f.length > 1) {
                         toast (f[1]);
+                    }
                 }
                 yield proc.wait_async ();
             } catch (Error e) {
