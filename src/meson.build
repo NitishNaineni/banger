@@ -5,6 +5,7 @@ sources = [
   'config.vapi',
   'main.vala',
   'banger/banger-service.vala',
+  'banger/discover-page.vala',
   'gst/ape-demux.c',
   'gst/gst-player.vala',
   'gst/peak-calculator.vala',
