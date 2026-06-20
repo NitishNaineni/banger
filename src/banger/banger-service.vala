@@ -45,8 +45,6 @@ namespace G4 {
 
         private File _library = File.new_build_filename (Environment.get_home_dir (), "Music", "library");
         private File _audition = File.new_build_filename (Environment.get_home_dir (), "Music", "audition");
-        private string _library_m3u = File.new_build_filename (Environment.get_home_dir (), "Music", "Playlists", "Library.m3u").get_uri ();
-        private string _audition_m3u = File.new_build_filename (Environment.get_home_dir (), "Music", "Playlists", "Audition.m3u").get_uri ();
 
         // basename -> rating cache changed; play-bar re-syncs its toggles.
         public signal void labels_changed ();
@@ -162,18 +160,31 @@ namespace G4 {
             } catch (Error e) {
                 warning ("banger label: %s", e.message);
             }
+            // the sidecar regenerated the .m3u files; (re)load them so the
+            // Library/Audition playlists appear and update.
+            yield reload_playlists ();
         }
 
-        // Load a file into the app's library views (albums/artists/queue) and add
-        // it to the given playlist node, so it appears live without a full reload.
-        private async void load_into_views (File file, string playlist_uri) {
+        // Load an audio file into the library views (albums/artists/queue).
+        private async void add_audio (File file) {
+            var app = GLib.Application.get_default () as Application;
+            if (app != null)
+                yield ((!) app).loader.on_file_added (file);
+        }
+
+        // (Re)load the regenerated Audition.m3u / Library.m3u so their playlist
+        // nodes are created or updated in place (and the views refresh) — without
+        // a full library reload.
+        private async void reload_playlists () {
             var app = GLib.Application.get_default () as Application;
             if (app == null)
                 return;
-            yield ((!) app).loader.on_file_added (file);
-            var music = ((!) app).loader.find_cache (file.get_uri ());
-            if (music != null)
-                ((!) app).loader.library.add_to_playlist (playlist_uri, (!) music);
+            var dir = File.new_build_filename (Environment.get_home_dir (), "Music", "Playlists");
+            foreach (unowned var name in new string[] { "Library.m3u", "Audition.m3u" }) {
+                var m3u = dir.get_child (name);
+                if (m3u.query_exists ())
+                    yield ((!) app).loader.on_file_added (m3u);
+            }
         }
 
         public async void like (Music music) {
@@ -196,7 +207,7 @@ namespace G4 {
                     }
                     yield src.copy_async (dst, FileCopyFlags.OVERWRITE);
                 }
-                yield load_into_views (dst, _library_m3u);   // show it in the library + Library playlist
+                yield add_audio (dst);
             } catch (Error e) {
                 warning ("banger like: copy failed: %s", e.message);
                 toast (_("Couldn't add to library: %s").printf (e.message));
@@ -235,7 +246,7 @@ namespace G4 {
                     lib.move (aud, FileCopyFlags.NONE);                 // old batch -> back to audition
                     if (app != null)
                         yield ((!) app).loader.on_file_removed (lib);
-                    yield load_into_views (aud, _audition_m3u);         // show it back in audition
+                    yield add_audio (aud);
                 }
             } catch (Error e) {
                 toast (e.message);
