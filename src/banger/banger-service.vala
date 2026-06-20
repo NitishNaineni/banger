@@ -56,6 +56,23 @@ namespace G4 {
             _script = Path.build_filename (_home, "scripts", "banger_api.py");
             var uv = Environment.find_program_in_path ("uv");
             _uv = uv ?? Path.build_filename (Environment.get_home_dir (), ".local", "bin", "uv");
+            // retry any cached (offline) feedback whenever the network comes back
+            NetworkMonitor.get_default ().network_changed.connect ((available) => {
+                if (available)
+                    flush_feedback.begin ((obj, res) => flush_feedback.end (res));
+            });
+        }
+
+        // Ship any like/dislike feedback that couldn't reach ListenBrainz earlier
+        // (offline). The label is already saved locally; this just syncs it.
+        public async void flush_feedback () {
+            if (!available)
+                return;
+            try {
+                yield run_api ({ "flush" });
+            } catch (Error e) {
+                warning ("banger flush: %s", e.message);
+            }
         }
 
         public bool available {

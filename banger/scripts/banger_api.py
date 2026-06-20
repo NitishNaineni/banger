@@ -56,6 +56,24 @@ def _send_feedback(mbid, rating):
         return False
 
 
+def _flush_pending(con):
+    """Send any like/dislike feedback not yet on ListenBrainz (offline backlog).
+
+    Stops at the first failure (the API/network is likely down) and leaves the
+    rest as feedback=0 to retry next time. Returns how many were sent."""
+    sent = 0
+    rows = con.execute("SELECT id, mbid, label FROM tracks "
+                       "WHERE label IS NOT NULL AND feedback = 0 AND mbid != ''").fetchall()
+    for r in rows:
+        if _send_feedback(r["mbid"], r["label"]):
+            db.mark_feedback(con, r["id"]); sent += 1
+        else:
+            break
+    if sent:
+        con.commit()
+    return sent
+
+
 def _localpath(p):
     """Normalize a percent-encoded file:// URI (as GIO emits) to a plain filesystem path."""
     return unquote(urlparse(p).path) if p.startswith("file://") else p
@@ -107,20 +125,29 @@ def cmd_label(con, path, rating):
     con.execute("UPDATE tracks SET label=?, feedback=0, updated_at=datetime('now') WHERE id=?",
                 (label, r["id"]))
     con.commit()
-    sent = _send_feedback(r["mbid"], rating)
-    if sent:
-        db.mark_feedback(con, r["id"]); con.commit()
+    # un-rating clears LB feedback (best-effort); like/dislike go through the
+    # pending flush, so an offline tap is cached (feedback=0) and retried later.
+    if rating == "none":
+        _send_feedback(r["mbid"], "none")
+    flushed = _flush_pending(con)
     # keep the playlists in sync with the like/dislike just made
     write_m3u("Audition", AUDITION)
     write_m3u("Library", LIBRARY)
     _line("ok", True)
     _line("rating", rating)
-    _line("feedback_sent", sent)
+    _line("flushed", flushed)
+
+
+def cmd_flush(con):
+    _line("flushed", _flush_pending(con))
 
 
 def cmd_refresh():
     # "I'm done with this batch" -> clear audition, generate + download the next batch.
     # Progress lines: progress\t<message>\t<done>\t<total>  (done/total optional).
+    con0 = db.connect()
+    _flush_pending(con0)   # ship any offline backlog before moving on
+    con0.close()
     _line("progress", "Clearing audition…")
     for f in audio_files(AUDITION):
         try:
@@ -172,6 +199,7 @@ def main():
     p_label.add_argument("--file", required=True)
     p_label.add_argument("--rating", required=True, choices=["like", "dislike", "none"])
     sub.add_parser("refresh")
+    sub.add_parser("flush")
     args = ap.parse_args()
 
     if args.cmd == "refresh":
@@ -184,6 +212,8 @@ def main():
         cmd_labels(con)
     elif args.cmd == "label":
         cmd_label(con, args.file, args.rating)
+    elif args.cmd == "flush":
+        cmd_flush(con)
     con.close()
 
 

@@ -103,6 +103,7 @@ namespace G4 {
                 app.music_changed.connect (sync_rating);
                 banger.labels_changed.connect (() => sync_rating (app.current_music));
                 banger.load_labels.begin ((obj, res) => banger.load_labels.end (res));
+                banger.flush_feedback.begin ((obj, res) => banger.flush_feedback.end (res));
             }
 
             _prev.valign = Gtk.Align.CENTER;
