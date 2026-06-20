@@ -93,7 +93,7 @@ def run(con, n, rip):
         if not did:
             unmatched += 1
             db.set_download(con, r["id"], "", "")
-            return
+            return ""
         before = set(audio_files(AUDITION))
         # --no-db: ignore streamrip's own download-history (we dedup via our DB;
         # otherwise streamrip skips anything downloaded in a past session).
@@ -102,11 +102,12 @@ def run(con, n, rip):
         saved = (sorted(set(audio_files(AUDITION)) - before) or [""])[0]
         n_ok += bool(saved); fail += not saved
         db.set_download(con, r["id"], did, saved)
+        return saved
 
     if prog_mode:
         for i, r in enumerate(rows, 1):
-            _one(r)
-            print(f"DL\t{i}\t{total}\t{r['artist']} - {r['title']}", flush=True)
+            saved = _one(r)   # emit the saved path so the app can load it live
+            print(f"DL\t{i}\t{total}\t{saved}\t{r['artist']} - {r['title']}", flush=True)
     else:                                             # downloads stay serial (ban-safe)
         with download_progress() as prog:
             task = prog.add_task("starting…", total=total)

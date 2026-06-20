@@ -241,6 +241,13 @@ namespace G4 {
                             if (total > 0)
                                 frac = double.parse (f[2]) / total;
                         }
+                        // load the just-downloaded track so it shows up immediately
+                        // (one at a time -> no concurrent-add race)
+                        if (f.length >= 5 && f[4].length > 0) {
+                            var app = GLib.Application.get_default () as Application;
+                            if (app != null)
+                                yield ((!) app).loader.on_file_added (File.new_for_uri (f[4]));
+                        }
                         refresh_progress (f[1], frac);
                     } else if (f[0] == "ok") {
                         ok = f.length > 1 && f[1] == "true";

@@ -15,7 +15,7 @@ played from ~/Music/audition/ or its ~/Music/library/ copy (same filename).
 
 Run under `uv run --project <bangerdir>` so troi/streamrip and config are available.
 """
-import argparse, json, os, subprocess, sys, urllib.request
+import argparse, json, os, pathlib, subprocess, sys, urllib.request
 from urllib.parse import unquote, urlparse
 import db
 from _paths import AUDITION, LIBRARY, audio_files, load_config, write_m3u
@@ -144,12 +144,16 @@ def cmd_refresh():
         [sys.executable, os.path.join(SCRIPTS, "download_batch.py"), str(n)],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
     for raw in proc.stdout:
-        parts = raw.rstrip("\n").split("\t", 3)
-        if len(parts) == 4 and parts[0] == "DL":
-            done, total, desc = parts[1], parts[2], parts[3]
-            _line("progress", f"Downloading {done}/{total}: {desc}", done, total)
+        parts = raw.rstrip("\n").split("\t", 4)
+        if len(parts) == 5 and parts[0] == "DL":
+            done, total, saved, desc = parts[1], parts[2], parts[3], parts[4]
+            uri = pathlib.Path(saved).as_uri() if saved else ""
+            # progress\t<message>\t<done>\t<total>\t<file uri> — uri lets the app
+            # load each track the moment it lands.
+            _line("progress", f"Downloading {done}/{total}: {desc}", done, total, uri)
     rc = proc.wait()
-    write_m3u("Library", LIBRARY)   # audition is the Audition tab now, not a playlist
+    write_m3u("Audition", AUDITION)
+    write_m3u("Library", LIBRARY)
     con.close()
     _line("ok", rc == 0)
     _line("batch_number", n)
