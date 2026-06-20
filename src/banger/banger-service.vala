@@ -236,17 +236,16 @@ namespace G4 {
             if (!lib.query_exists ())
                 return;
             var aud = _audition.get_child (name);
-            var app = GLib.Application.get_default () as Application;
             try {
+                // Note: we do NOT call on_file_removed here — that would also pull
+                // the playing track out of the queue and clear current_music, so you
+                // couldn't re-like the song you're listening to. The Library playlist
+                // is refreshed from its regenerated m3u in set_label.
                 if (aud.query_exists ()) {
                     yield lib.delete_async ();
-                    if (app != null)
-                        yield ((!) app).loader.on_file_removed (lib);   // drop from views + playlists
                 } else {
-                    lib.move (aud, FileCopyFlags.NONE);                 // old batch -> back to audition
-                    if (app != null)
-                        yield ((!) app).loader.on_file_removed (lib);
-                    yield add_audio (aud);
+                    lib.move (aud, FileCopyFlags.NONE);   // old batch -> back to audition
+                    yield add_audio (aud);                // make it available again in audition
                 }
             } catch (Error e) {
                 toast (e.message);
