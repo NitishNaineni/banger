@@ -87,7 +87,9 @@ def run(con, n, rip):
                 db.set_download(con, r["id"], "", "")
                 prog.advance(task); continue
             before = set(audio_files(AUDITION))
-            subprocess.run([rip, "--folder", AUDITION, "id", "deezer", "track", did],
+            # --no-db: ignore streamrip's own download-history (we dedup via our DB;
+            # otherwise streamrip skips anything downloaded in a past session).
+            subprocess.run([rip, "--no-db", "--folder", AUDITION, "id", "deezer", "track", did],
                            capture_output=True)
             new_files = sorted(set(audio_files(AUDITION)) - before)
             saved = new_files[0] if new_files else ""
