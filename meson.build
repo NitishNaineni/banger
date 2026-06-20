@@ -63,6 +63,15 @@ subdir('data')
 subdir('po')
 subdir('src')
 
+# banger: install the bundled Python discovery pipeline as app data. The .venv is
+# created on first run by `uv`; user state/secrets live in XDG dirs, never here.
+install_subdir(
+  'banger',
+  install_dir: get_option('datadir') / meson.project_name(),
+  exclude_directories: ['.venv', '__pycache__', 'scripts/__pycache__', 'audition'],
+  exclude_files: ['config.toml'],
+)
+
 gnome.post_install(
   glib_compile_schemas: true,
   gtk_update_icon_cache: true,
