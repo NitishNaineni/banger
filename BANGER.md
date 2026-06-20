@@ -28,11 +28,21 @@ app drives it; it never reimplements it.
 ```
 src/banger/                         all the Vala glue (isolated, new files)
   banger-service.vala   runs the sidecar via `uv run`, label cache, like/dislike, refresh
-  audition-page.vala    the Audition page (track list + Refresh)
+  folder-list.vala      self-scanning MusicList base (owns its ListStore)
+  audition-page.vala    Audition tab: FolderList(~/Music/audition) + Refresh header
+  library-page.vala     Library tab: FolderList(~/Music/library), sortable
 banger/                             the bundled Python pipeline (copied from the standalone repo)
   scripts/banger_api.py   tab-separated facade the app calls: status / labels / label / refresh
   scripts/*.py            make_batch, download_batch, capture_labels, db, _paths
 ```
+
+**Tabs: Playing · Audition · Library · Artists · Albums** (Playlists hidden).
+Audition/Library are **self-contained lists the app owns** (scanned from their
+folders) — NOT m3u playlists. Like/unlike does the file op + DB + ListenBrainz,
+then updates the library model (`load_files_async`/`library.remove_music` +
+`notify_library_changed`) and signals the tabs to re-scan — **never touching the
+play queue**, so the song you're playing stays `current_music` and is re-likeable.
+`music-dir = ~/Music/library` so Artists/Albums reflect the likes.
 
 **User state lives outside the source tree** (so rebuilds/merges never touch it):
 
@@ -54,10 +64,11 @@ stable spots. After `git merge upstream/master`, re-apply only if these conflict
 | File | Edit |
 |---|---|
 | `meson.build` | `install_subdir('banger', …)` |
-| `src/meson.build` | add `banger/banger-service.vala`, `banger/audition-page.vala` to `sources` |
+| `src/meson.build` | add the `banger/*.vala` files to `sources` |
 | `src/gresource.xml` | add the two `thumbs-*-symbolic.svg` icons |
-| `src/ui/music-widgets.vala` | `PageName.AUDITION` constant |
-| `src/ui/store-panel.vala` | one `add_titled(new AuditionPage(_app), …)` line |
+| `src/ui/music-widgets.vala` | `PageName.AUDITION` + `PageName.LIBRARY` constants |
+| `src/ui/store-panel.vala` | register Audition/Library tabs (drop the Playlists tab); sort button for Library |
+| `src/application.vala` | `notify_library_changed()` (queue-free library-view refresh) |
 | `src/ui/play-bar.vala` | the 👍/👎 toggles + `music_changed`/`labels_changed` sync |
 
 ## Build & run (native)

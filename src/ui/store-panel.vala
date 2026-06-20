@@ -83,6 +83,10 @@ namespace G4 {
             _current_list = _main_list;
             stack_view.add_titled (_main_list, PageName.PLAYING, _("Playing")).icon_name = "user-home-symbolic";
 
+            // banger: Audition (current batch) + Library (likes) — self-contained tabs.
+            stack_view.add_titled (new AuditionPage (_app), PageName.AUDITION, _("Audition")).icon_name = "starred-symbolic";
+            stack_view.add_titled (new LibraryPage (_app), PageName.LIBRARY, _("Library")).icon_name = "emblem-favorite-symbolic";
+
             _artist_list = create_artist_list ();
             _artist_stack.add (_artist_list, PageName.ARTIST);
             _artist_stack.bind_property ("visible-child", this, "visible-child");
@@ -93,13 +97,10 @@ namespace G4 {
             _album_stack.bind_property ("visible-child", this, "visible-child");
             stack_view.add_titled (_album_stack.widget, PageName.ALBUM, _("Albums")).icon_name = "drive-multidisk-symbolic";
 
+            // Keep the playlist stack (referenced by code) but don't show it as a tab.
             _playlist_list = create_playlist_list ();
             _playlist_stack.add (_playlist_list, PageName.PLAYLIST);
             _playlist_stack.bind_property ("visible-child", this, "visible-child");
-            stack_view.add_titled (_playlist_stack.widget, PageName.PLAYLIST, _("Playlists")).icon_name = "view-list-symbolic";
-
-            // banger: the Audition page (current batch list + Refresh button)
-            stack_view.add_titled (new AuditionPage (_app), PageName.AUDITION, _("Audition")).icon_name = "starred-symbolic";
 
             stack_view.transition_type = Gtk.StackTransitionType.SLIDE_LEFT_RIGHT;
             stack_view.bind_property ("visible-child", this, "visible-child");
@@ -185,7 +186,7 @@ namespace G4 {
                 if (value is MusicList) {
                     var list = _current_list = (MusicList) value;
                     indicator.visible = _current_list.modified;
-                    sort_btn.visible = _current_list == _main_list;
+                    sort_btn.visible = _current_list == _main_list || _current_list is LibraryPage;
                     _search_mode = SearchMode.ANY;
                     on_search_btn_toggled ();
 

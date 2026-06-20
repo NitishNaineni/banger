@@ -1,0 +1,88 @@
+/*
+ * banger — a self-contained MusicList over a folder.
+ *
+ * It owns its own ListStore, derived purely by scanning a folder — decoupled from
+ * the app's library scan, the m3u playlists and the play queue. So adding/removing
+ * a track is immediate, never disturbs playback (current_music stays put), and
+ * covers load per-row (MusicList's native lazy thumbnailing). This is the
+ * foundation for both the Audition and Library tabs.
+ */
+namespace G4 {
+
+    public class FolderList : MusicList {
+        protected File folder;
+        protected uint sort_order = SortMode.TITLE;
+        private HashTable<string, Music> _cache = new HashTable<string, Music> (str_hash, str_equal);
+        private bool _loading = false;
+
+        public signal void reloaded (uint count);
+
+        public FolderList (Application app, File folder) {
+            base (app, typeof (Music), null, false);
+            this.folder = folder;
+
+            item_binded.connect ((item) => {
+                ((MusicEntry) item.child).set_titles ((Music) item.item, sort_order);
+            });
+            item_activated.connect ((position, obj) => {
+                var playlist = get_as_playlist ();
+                _app.current_item = _app.insert_after_current (playlist) + (int) position;
+                if (!_app.player.playing)
+                    _app.player.play ();
+            });
+
+            BangerService.instance.lists_changed.connect (reload);
+            map.connect (reload);
+        }
+
+        // Re-scan the folder and refresh the list (tags parsed off the main thread,
+        // cached by uri so repeat scans are instant).
+        public void reload () {
+            if (!_loading)
+                do_reload.begin ((obj, res) => do_reload.end (res));
+        }
+
+        private async void do_reload () {
+            _loading = true;
+            var found = new GenericArray<Music> ();
+            var dir = folder;
+            var cache = _cache;
+            yield run_void_async (() => {
+                try {
+                    var en = dir.enumerate_children (
+                        "standard::name,standard::content-type,time::modified",
+                        FileQueryInfoFlags.NONE);
+                    FileInfo? info = null;
+                    while ((info = en.next_file ()) != null) {
+                        unowned var ctype = ((!) info).get_content_type () ?? "";
+                        if (!is_music_type (ctype))
+                            continue;
+                        var file = dir.get_child (((!) info).get_name ());
+                        var uri = file.get_uri ();
+                        Music? m = cache.get (uri);
+                        if (m == null) {
+                            var time = ((!) info).get_modification_date_time ()?.to_unix () ?? 0;
+                            var music = new Music (uri, ((!) info).get_name (), time);
+                            music.parse_tags ();
+                            cache.set (uri, music);
+                            m = music;
+                        }
+                        found.add ((!) m);
+                    }
+                } catch (Error e) {
+                }
+            });
+            sort_music_array (found, sort_order);
+            data_store.splice (0, data_store.get_n_items (), (Object[]) found.data);
+            _loading = false;
+            reloaded (found.length);
+        }
+
+        public void set_sort_order (uint mode) {
+            if (sort_order != mode) {
+                sort_order = mode;
+                reload ();
+            }
+        }
+    }
+}

@@ -573,6 +573,14 @@ namespace G4 {
             }
         }
 
+        // Refresh the library views (Artists/Albums/...) after the library model
+        // was mutated directly — WITHOUT touching the play queue. Used by banger's
+        // like/unlike so the playing track and current_music are left intact.
+        public void notify_library_changed () {
+            _store_external_changed = true;
+            on_music_library_changed (0, 1, 1);
+        }
+
         private void on_music_lost (GenericSet<Music> removed) {
             _store_external_changed = true;
             // Match by URI: the queue may hold a different Music instance than the cache.

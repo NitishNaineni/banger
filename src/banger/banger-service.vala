@@ -48,6 +48,8 @@ namespace G4 {
 
         // basename -> rating cache changed; play-bar re-syncs its toggles.
         public signal void labels_changed ();
+        // the audition/library folders changed; the custom tabs re-scan.
+        public signal void lists_changed ();
         // progress during refresh (): a message plus done/total (both 0 for an
         // indeterminate phase like "Clearing audition…").
         public signal void refresh_progress (string message, int done, int total);
@@ -160,31 +162,6 @@ namespace G4 {
             } catch (Error e) {
                 warning ("banger label: %s", e.message);
             }
-            // the sidecar regenerated the .m3u files; (re)load them so the
-            // Library/Audition playlists appear and update.
-            yield reload_playlists ();
-        }
-
-        // Load an audio file into the library views (albums/artists/queue).
-        private async void add_audio (File file) {
-            var app = GLib.Application.get_default () as Application;
-            if (app != null)
-                yield ((!) app).loader.on_file_added (file);
-        }
-
-        // (Re)load the regenerated Audition.m3u / Library.m3u so their playlist
-        // nodes are created or updated in place (and the views refresh) — without
-        // a full library reload.
-        private async void reload_playlists () {
-            var app = GLib.Application.get_default () as Application;
-            if (app == null)
-                return;
-            var dir = File.new_build_filename (Environment.get_home_dir (), "Music", "Playlists");
-            foreach (unowned var name in new string[] { "Library.m3u", "Audition.m3u" }) {
-                var m3u = dir.get_child (name);
-                if (m3u.query_exists ())
-                    yield ((!) app).loader.on_file_added (m3u);
-            }
         }
 
         public async void like (Music music) {
@@ -207,49 +184,65 @@ namespace G4 {
                     }
                     yield src.copy_async (dst, FileCopyFlags.OVERWRITE);
                 }
-                yield add_audio (dst);
+                // Load the library copy into the library model (Artists/Albums)
+                // WITHOUT splicing into the play queue, then refresh those views.
+                var app = GLib.Application.get_default () as Application;
+                if (app != null) {
+                    var arr = new GenericArray<Music> ();
+                    yield ((!) app).loader.load_files_async ({ dst }, arr, true, false, -1);
+                    ((!) app).notify_library_changed ();
+                }
             } catch (Error e) {
                 warning ("banger like: copy failed: %s", e.message);
                 toast (_("Couldn't add to library: %s").printf (e.message));
                 return;
             }
             yield set_label (music.uri, Rating.LIKE);
+            lists_changed ();
         }
 
         public async void unlike (Music music) {
             yield remove_library_copy (music);
             yield set_label (music.uri, Rating.NONE);
+            lists_changed ();
         }
 
         public async void dislike (Music music) {
             yield remove_library_copy (music);
             yield set_label (music.uri, Rating.DISLIKE);
+            lists_changed ();
         }
 
         // Drop the library copy when un-liking/disliking. If the song is still in
         // the current audition we just delete the copy; if it's from an old batch
-        // (library is the only copy) we MOVE it back to audition instead of
-        // deleting, so a mistaken un-like is never destructive and stays re-likeable.
+        // (library is the only copy) we MOVE it back to audition so a mistaken
+        // un-like is never destructive and stays re-likeable.
+        //
+        // We update only the library MODEL (Artists/Albums) and the folders — never
+        // the play queue — so the song you're playing stays current_music and can be
+        // re-liked.
         private async void remove_library_copy (Music music) {
             var name = basename_of (music.uri);
             var lib = _library.get_child (name);
             if (!lib.query_exists ())
                 return;
             var aud = _audition.get_child (name);
+            var app = GLib.Application.get_default () as Application;
+            if (app != null) {
+                var track = ((!) app).loader.find_cache (lib.get_uri ());
+                if (track != null)
+                    ((!) app).loader.library.remove_music ((!) track);
+            }
             try {
-                // Note: we do NOT call on_file_removed here — that would also pull
-                // the playing track out of the queue and clear current_music, so you
-                // couldn't re-like the song you're listening to. The Library playlist
-                // is refreshed from its regenerated m3u in set_label.
-                if (aud.query_exists ()) {
+                if (aud.query_exists ())
                     yield lib.delete_async ();
-                } else {
+                else
                     lib.move (aud, FileCopyFlags.NONE);   // old batch -> back to audition
-                    yield add_audio (aud);                // make it available again in audition
-                }
             } catch (Error e) {
                 toast (e.message);
             }
+            if (app != null)
+                ((!) app).notify_library_changed ();
         }
 
         public async BangerStatus get_status () {

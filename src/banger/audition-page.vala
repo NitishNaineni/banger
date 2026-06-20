@@ -1,100 +1,60 @@
 /*
- * banger — the Audition page.
+ * banger — the Audition tab.
  *
- * Deliberately simple: the batch number + a live song count, a Refresh button,
- * and (while a batch downloads) a progress bar with "n/total · ETA" and the
- * current track. Tracks load into the app the moment they finish downloading,
- * so the count ticks up live.
+ * A self-scanning list of the current batch (~/Music/audition) with a header:
+ * a Refresh icon, the batch number + song count, and (while a batch downloads)
+ * an inline progress bar with n/total · ETA · current track.
  */
 namespace G4 {
 
-    public class AuditionPage : Gtk.Box {
-        private Application _app;
-        private Gtk.Button _refresh = new Gtk.Button.with_label (_("Refresh Batch"));
-        private Gtk.Label _status = new Gtk.Label ("");
+    public class AuditionPage : FolderList {
+        private Gtk.Button _refresh = new Gtk.Button.from_icon_name ("view-refresh-symbolic");
+        private Gtk.Label _info = new Gtk.Label ("");
         private Gtk.ProgressBar _progress = new Gtk.ProgressBar ();
-        private Gtk.Label _track = new Gtk.Label ("");
-        private string _audition_uri;
-        private int _batch_number = 0;
-        private int _song_count = 0;
-        private bool _configured = true;
-        private int64 _start_time = 0;
+        private int _batch = 0;
+        private int64 _start = 0;
 
         public AuditionPage (Application app) {
-            _app = app;
-            _audition_uri = File.new_build_filename (
-                Environment.get_home_dir (), "Music", "audition").get_uri () + "/";
+            base (app, File.new_build_filename (Environment.get_home_dir (), "Music", "audition"));
+            sort_order = SortMode.TITLE;
 
-            orientation = Gtk.Orientation.VERTICAL;
-            spacing = 14;
-            halign = Gtk.Align.CENTER;
-            valign = Gtk.Align.CENTER;
-
-            var title = new Gtk.Label (_("Audition"));
-            title.halign = Gtk.Align.CENTER;
-            title.add_css_class ("title-1");
-            append (title);
-
-            _status.halign = Gtk.Align.CENTER;
-            _status.add_css_class ("dim-label");
-            append (_status);
-
-            _refresh.halign = Gtk.Align.CENTER;
-            _refresh.margin_top = 4;
-            _refresh.add_css_class ("suggested-action");
-            _refresh.add_css_class ("pill");
-            _refresh.tooltip_text = _("Clear this batch and download the next one");
+            var header = new Gtk.Box (Gtk.Orientation.VERTICAL, 4);
+            header.add_css_class ("toolbar");
+            var row = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
+            _refresh.add_css_class ("flat");
+            _refresh.tooltip_text = _("Refresh batch — download the next one");
             _refresh.clicked.connect (on_refresh);
+            row.append (_refresh);
+            _info.add_css_class ("dim-label");
+            _info.halign = Gtk.Align.START;
+            _info.hexpand = true;
+            _info.ellipsize = Pango.EllipsizeMode.END;
+            row.append (_info);
+            header.append (row);
+            _progress.show_text = true;
+            _progress.ellipsize = Pango.EllipsizeMode.END;
+            _progress.visible = false;
+            header.append (_progress);
+            prepend (header);
+
             if (!BangerService.instance.available)
                 _refresh.sensitive = false;
-            append (_refresh);
-
-            _progress.halign = Gtk.Align.CENTER;
-            _progress.width_request = 300;
-            _progress.show_text = true;
-            _progress.visible = false;
-            append (_progress);
-
-            _track.halign = Gtk.Align.CENTER;
-            _track.max_width_chars = 36;
-            _track.ellipsize = Pango.EllipsizeMode.END;
-            _track.add_css_class ("dim-label");
-            _track.visible = false;
-            append (_track);
-
-            _app.music_library_changed.connect ((external) => update_count ());
-            map.connect (() => { update_batch (); update_count (); });
+            reloaded.connect ((n) => set_info (n));
+            map.connect (update_info);
         }
 
-        private void rebuild_status () {
-            if (_batch_number > 0)
-                _status.label = _("Batch #%d   ·   %d songs").printf (_batch_number, _song_count);
-            else
-                _status.label = _("No batch yet");
-            if (!_configured)
-                _status.label += _("   ·   add your token to ~/.config/banger/config.toml");
-        }
-
-        // Count the audition tracks currently loaded in the app (cheap, live).
-        private void update_count () {
-            var queue = _app.music_queue;
-            var n = queue.get_n_items ();
-            var c = 0;
-            for (uint i = 0; i < n; i++) {
-                if (((Music) queue.get_item (i)).uri.has_prefix (_audition_uri))
-                    c++;
-            }
-            _song_count = c;
-            rebuild_status ();
-        }
-
-        private void update_batch () {
+        private void update_info () {
             BangerService.instance.get_status.begin ((obj, res) => {
                 var s = BangerService.instance.get_status.end (res);
-                _batch_number = s.batch_number;
-                _configured = s.configured;
-                rebuild_status ();
+                _batch = s.batch_number;
+                set_info (data_store.get_n_items ());
             });
+        }
+
+        private void set_info (uint count) {
+            _info.label = _batch > 0
+                ? _("Batch #%d   ·   %u songs").printf (_batch, count)
+                : _("No batch yet");
         }
 
         private string format_eta (double seconds) {
@@ -108,37 +68,34 @@ namespace G4 {
 
         private void on_refresh () {
             _refresh.sensitive = false;
+            _info.visible = false;
             _progress.visible = true;
             _progress.fraction = 0;
             _progress.text = _("Starting…");
-            _track.visible = false;
-            _start_time = GLib.get_monotonic_time ();
+            _start = GLib.get_monotonic_time ();
             var banger = BangerService.instance;
             var id = banger.refresh_progress.connect ((msg, done, total) => {
                 if (total > 0) {
                     _progress.fraction = (double) done / total;
                     var eta = "";
                     if (done > 0) {
-                        var elapsed = (GLib.get_monotonic_time () - _start_time) / 1e6;
+                        var elapsed = (GLib.get_monotonic_time () - _start) / 1e6;
                         eta = "   ·   " + format_eta (elapsed * (total - done) / done);
                     }
-                    _progress.text = @"$done/$total$eta";
-                    _track.label = msg;
-                    _track.visible = true;
+                    _progress.text = @"$done/$total$eta   ·   $msg";
                 } else {
                     _progress.pulse ();
                     _progress.text = msg;
-                    _track.visible = false;
                 }
             });
             banger.refresh.begin ((obj, res) => {
                 banger.refresh.end (res);
                 banger.disconnect (id);
                 _progress.visible = false;
-                _track.visible = false;
+                _info.visible = true;
                 _refresh.sensitive = true;
-                _app.reload_library ();   // load the Audition / Library playlists
-                update_batch ();
+                reload ();
+                update_info ();
             });
         }
     }

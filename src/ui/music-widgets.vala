@@ -6,6 +6,7 @@ namespace G4 {
         public const string PLAYING = "playing";
         public const string PLAYLIST = "playlist";
         public const string AUDITION = "audition";   // banger
+        public const string LIBRARY = "library";      // banger
     }
 
     public class MusicWidget : Gtk.Box {
