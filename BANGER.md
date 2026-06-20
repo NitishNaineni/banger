@@ -85,3 +85,12 @@ git fetch upstream && git merge upstream/master
 ```
 
 Because the additions are isolated, merges touch only the few files above.
+
+## Note: file monitoring
+
+banger does its own file management and reloads, so it runs with
+`monitor-changes` **off** (the schema default). Leave it off: with it on, a batch
+download dumps ~100 files into the watched audition folder at once, and G4Music's
+loader isn't safe for concurrent `on_file_added` (it races on the unlocked
+`Album._musics` hashtable and segfaults). The proper upstream fix is to lock those
+add paths; until then, keep `monitor-changes` disabled.

@@ -2,15 +2,15 @@
  * banger — the Audition page.
  *
  * A self-contained MusicList that lists the current audition batch (the tracks
- * in ~/Music/audition) and plays them, with a header holding a Refresh button +
- * progress bar. Refresh clears the batch and downloads the next one; like/dislike
- * happen on the play bar. All work is delegated to BangerService.
+ * in ~/Music/audition) and plays them. Its header is a single row: a Refresh
+ * icon and, beside it, the batch number — replaced by an inline progress bar
+ * while a refresh runs. Like/dislike happen on the play bar.
  */
 namespace G4 {
 
     public class AuditionPage : MusicList {
-        private Gtk.Button _refresh_btn = new Gtk.Button.with_label (_("Refresh"));
-        private Gtk.Label _status = new Gtk.Label ("");
+        private Gtk.Button _refresh_btn = new Gtk.Button.from_icon_name ("view-refresh-symbolic");
+        private Gtk.Label _batch = new Gtk.Label ("");
         private Gtk.ProgressBar _progress = new Gtk.ProgressBar ();
         private string _audition_uri;
 
@@ -19,23 +19,22 @@ namespace G4 {
             _audition_uri = File.new_build_filename (
                 Environment.get_home_dir (), "Music", "audition").get_uri () + "/";
 
-            // Header: a toolbar row (Refresh + status) and a progress bar, above the list.
-            var header = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
+            // Header row: [Refresh icon]  [batch number | progress bar].
             var bar = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
             bar.add_css_class ("toolbar");
-            _refresh_btn.add_css_class ("suggested-action");
-            _refresh_btn.tooltip_text = _("Clear this batch and download the next one");
+            _refresh_btn.add_css_class ("flat");
+            _refresh_btn.tooltip_text = _("Refresh batch — download the next one");
             _refresh_btn.clicked.connect (on_refresh);
             bar.append (_refresh_btn);
-            _status.add_css_class ("dim-label");
-            _status.hexpand = true;
-            _status.halign = Gtk.Align.START;
-            _status.ellipsize = Pango.EllipsizeMode.END;
-            bar.append (_status);
-            header.append (bar);
+            _batch.add_css_class ("dim-label");
+            _batch.halign = Gtk.Align.START;
+            _batch.hexpand = true;
+            bar.append (_batch);
+            _progress.hexpand = true;
+            _progress.valign = Gtk.Align.CENTER;
             _progress.visible = false;
-            header.append (_progress);
-            prepend (header);
+            bar.append (_progress);
+            prepend (bar);
 
             item_binded.connect ((item) => {
                 ((MusicEntry) item.child).set_titles ((Music) item.item, SortMode.TITLE);
@@ -47,12 +46,10 @@ namespace G4 {
                     _app.player.play ();
             });
 
-            if (BangerService.instance.available)
-                _app.music_library_changed.connect ((external) => reload ());
-            else
+            if (!BangerService.instance.available)
                 _refresh_btn.sensitive = false;
-
-            map.connect (() => { reload (); });
+            _app.music_library_changed.connect ((external) => reload ());
+            map.connect (() => reload ());
         }
 
         // Repopulate the list from the tracks currently under ~/Music/audition.
@@ -73,19 +70,14 @@ namespace G4 {
         private void update_status () {
             BangerService.instance.get_status.begin ((obj, res) => {
                 var s = BangerService.instance.get_status.end (res);
-                var sb = new StringBuilder ();
-                if (s.batch_number > 0)
-                    sb.append_printf (_("Batch #%d   ·   "), s.batch_number);
-                sb.append_printf (_("%u songs   ·   %d liked   ·   %d disliked"),
-                                  data_store.get_n_items (), s.liked, s.disliked);
-                if (!s.configured)
-                    sb.append (_("   ·   add your token to ~/.config/banger/config.toml"));
-                _status.label = sb.str;
+                _batch.label = s.batch_number > 0 ? _("Batch #%d").printf (s.batch_number)
+                                                  : _("No batch yet");
             });
         }
 
         private void on_refresh () {
             _refresh_btn.sensitive = false;
+            _batch.visible = false;
             _progress.visible = true;
             _progress.show_text = true;
             _progress.fraction = 0;
@@ -102,8 +94,9 @@ namespace G4 {
                 banger.refresh.end (res);
                 banger.disconnect (id);
                 _progress.visible = false;
+                _batch.visible = true;
                 _refresh_btn.sensitive = true;
-                _app.reload_library ();   // rescans -> music_library_changed -> reload ()
+                _app.reload_library ();   // single-threaded rescan -> reload ()
                 update_status ();
             });
         }
