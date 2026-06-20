@@ -205,14 +205,23 @@ namespace G4 {
             yield set_label (music.uri, Rating.DISLIKE);
         }
 
+        // Drop the library copy when un-liking/disliking. If the song is still in
+        // the current audition we just delete the copy; if it's from an old batch
+        // (library is the only copy) we MOVE it back to audition instead of
+        // deleting, so a mistaken un-like is never destructive and stays re-likeable.
         private async void remove_library_copy (Music music) {
-            var dst = _library.get_child (basename_of (music.uri));
-            if (dst.query_exists ()) {
-                try {
-                    yield dst.delete_async ();
-                } catch (Error e) {
-                    toast (e.message);
-                }
+            var name = basename_of (music.uri);
+            var lib = _library.get_child (name);
+            if (!lib.query_exists ())
+                return;
+            var aud = _audition.get_child (name);
+            try {
+                if (aud.query_exists ())
+                    yield lib.delete_async ();
+                else
+                    lib.move (aud, FileCopyFlags.NONE);   // same filesystem -> instant rename
+            } catch (Error e) {
+                toast (e.message);
             }
         }
 
