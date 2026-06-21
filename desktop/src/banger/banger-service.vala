@@ -48,6 +48,7 @@ namespace G4 {
 
         private FileMonitor? _lib_monitor = null;
         private uint _sync_timer = 0;
+        private uint _reconcile_timer = 0;
         private bool _syncing = false;
 
         // basename -> rating cache changed; play-bar re-syncs its toggles.
@@ -79,12 +80,49 @@ namespace G4 {
                 _lib_monitor = _library.monitor_directory (FileMonitorFlags.WATCH_MOVES);
                 ((!) _lib_monitor).changed.connect ((file, other, ev) => {
                     if (ev == FileMonitorEvent.CREATED || ev == FileMonitorEvent.MOVED_IN
-                        || ev == FileMonitorEvent.RENAMED || ev == FileMonitorEvent.CHANGES_DONE_HINT)
-                        schedule_sync ();
+                        || ev == FileMonitorEvent.RENAMED || ev == FileMonitorEvent.CHANGES_DONE_HINT) {
+                        schedule_sync ();         // new FLACs dropped in
+                        schedule_reconcile ();    // .banger/ CRDT logs synced from the phone
+                    }
                 });
             } catch (Error e) {
             }
-            schedule_sync ();   // reconcile anything added while the app was closed
+            schedule_sync ();        // import anything added while the app was closed
+            schedule_reconcile ();   // pull in like/dislike decisions made on the phone
+        }
+
+        // Coalesce CRDT-log changes (a Syncthing batch from the phone) into one reconcile.
+        private void schedule_reconcile () {
+            if (_reconcile_timer != 0)
+                Source.remove (_reconcile_timer);
+            _reconcile_timer = Timeout.add (1500, () => {
+                _reconcile_timer = 0;
+                reconcile_labels.begin ((o, r) => reconcile_labels.end (r));
+                return Source.REMOVE;
+            });
+        }
+
+        // Apply cross-device like/dislike decisions (the merged CRDT) the DB doesn't yet
+        // reflect — i.e. ones made on the phone — then refresh the rating cache + views.
+        public async void reconcile_labels () {
+            if (!available)
+                return;
+            int applied = 0;
+            try {
+                yield stream_api ({ "reconcile-labels" }, false, (f) => {
+                    if (f[0] == "applied" && f.length > 1)
+                        applied = int.parse (f[1]);
+                });
+            } catch (Error e) {
+                warning ("banger reconcile-labels: %s", e.message);
+            }
+            if (applied > 0) {
+                yield load_labels ();
+                lists_changed ();
+                var app = GLib.Application.get_default () as Application;
+                if (app != null)
+                    ((!) app).notify_library_changed ();
+            }
         }
 
         // Coalesce a burst of file events (a multi-file copy / Syncthing batch) into one
