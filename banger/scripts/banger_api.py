@@ -148,13 +148,9 @@ def cmd_refresh():
     con0 = db.connect()
     _flush_pending(con0)   # ship any offline backlog before moving on
     con0.close()
-    _line("progress", "Clearing audition…")
-    for f in audio_files(AUDITION):
-        try:
-            os.remove(f)
-        except OSError:
-            pass
 
+    # Generate the next batch FIRST; only clear audition once we actually have a
+    # new batch to download (a make_batch failure must not empty the tab).
     _line("progress", "Generating next batch…")
     mk = subprocess.run([sys.executable, os.path.join(SCRIPTS, "make_batch.py")],
                         capture_output=True, text=True)
@@ -166,6 +162,13 @@ def cmd_refresh():
         _line("ok", False)
         _line("error", (mk.stderr or "make_batch failed").strip()[-400:])
         return
+
+    _line("progress", "Clearing audition…")
+    for f in audio_files(AUDITION):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
 
     # stream per-track download progress from download_batch (BANGER_PROGRESS mode)
     env = dict(os.environ)

@@ -286,13 +286,24 @@ namespace G4 {
             return s;
         }
 
+        private Subprocess? _refresh_proc = null;
+
         // Clear the audition batch + generate and download the next one.
-        // Emits refresh_progress () per phase; returns true on success.
+        // Emits refresh_progress () per phase; returns true on success. The Audition
+        // tab shows the new tracks itself (its own folder re-scan on each progress) —
+        // we deliberately do NOT load them into the library model or the queue here.
         public async bool refresh () {
             bool ok = false;
+            kill_stray_downloads ();   // clear an orphan from a previous app run
             try {
-                var proc = new Subprocess.newv (api_argv ({ "refresh" }),
+                // setsid: run the sidecar as its own process group so cancel_refresh()
+                // can tear the whole uv/python/rip tree down (e.g. on app exit).
+                string[] argv = { "setsid" };
+                foreach (unowned var a in api_argv ({ "refresh" }))
+                    argv += a;
+                var proc = new Subprocess.newv (argv,
                     SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_SILENCE);
+                _refresh_proc = proc;
                 var stream = new DataInputStream ((!) proc.get_stdout_pipe ());
                 string? line = null;
                 while ((line = yield stream.read_line_async ()) != null) {
@@ -300,13 +311,6 @@ namespace G4 {
                     if (f[0] == "progress" && f.length >= 2) {
                         int done = f.length >= 3 ? int.parse (f[2]) : 0;
                         int total = f.length >= 4 ? int.parse (f[3]) : 0;
-                        // load the just-downloaded track so it shows up immediately
-                        // (one at a time -> no concurrent-add race)
-                        if (f.length >= 5 && f[4].length > 0) {
-                            var app = GLib.Application.get_default () as Application;
-                            if (app != null)
-                                yield ((!) app).loader.on_file_added (File.new_for_uri (f[4]));
-                        }
                         refresh_progress (f[1], done, total);
                     } else if (f[0] == "ok") {
                         ok = f.length > 1 && f[1] == "true";
@@ -317,10 +321,36 @@ namespace G4 {
                 yield proc.wait_async ();
             } catch (Error e) {
                 warning ("banger refresh: %s", e.message);
-                toast (e.message);
             }
+            _refresh_proc = null;
             yield load_labels ();
             return ok;
+        }
+
+        // Kill any running download tree — call on a new refresh or on app shutdown.
+        public void cancel_refresh () {
+            if (_refresh_proc != null) {
+                var pid = ((!) _refresh_proc).get_identifier ();
+                if (pid != null) {
+                    // setsid made the sidecar pid its own group leader; kill the group.
+                    try {
+                        new Subprocess.newv ({ "kill", "-KILL", "-" + (!) pid },
+                            SubprocessFlags.STDERR_SILENCE);
+                    } catch (Error e) {
+                    }
+                }
+                ((!) _refresh_proc).force_exit ();
+                _refresh_proc = null;
+            }
+            kill_stray_downloads ();
+        }
+
+        private void kill_stray_downloads () {
+            try {
+                new Subprocess.newv ({ "pkill", "-KILL", "-f", "scripts/download_batch.py" },
+                    SubprocessFlags.STDERR_SILENCE);
+            } catch (Error e) {
+            }
         }
 
         private void toast (string message) {

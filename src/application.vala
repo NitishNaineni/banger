@@ -134,6 +134,7 @@ namespace G4 {
 
         public override void shutdown () {
             _actions = null;
+            BangerService.instance.cancel_refresh ();   // tear down any download tree
             _loader.save_tag_cache ();
             delete_cover_tmp_file_async.begin ((obj, res) => delete_cover_tmp_file_async.end (res));
 

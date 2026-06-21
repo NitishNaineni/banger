@@ -22,6 +22,7 @@ from _ui import console, ok, download_progress
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SEARCH_WORKERS = 6          # safe parallel pool for the public search API
+RIP_TIMEOUT = 90            # per-track download timeout (s); skip a track that stalls
 
 
 def norm(s):
@@ -97,8 +98,19 @@ def run(con, n, rip):
         before = set(audio_files(AUDITION))
         # --no-db: ignore streamrip's own download-history (we dedup via our DB;
         # otherwise streamrip skips anything downloaded in a past session).
-        subprocess.run([rip, "--no-db", "--folder", AUDITION, "id", "deezer", "track", did],
-                       capture_output=True)
+        # timeout: a stalled track must not freeze the whole batch.
+        try:
+            subprocess.run([rip, "--no-db", "--folder", AUDITION, "id", "deezer", "track", did],
+                           capture_output=True, timeout=RIP_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            for f in set(audio_files(AUDITION)) - before:   # drop any partial file
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+            fail += 1
+            db.set_download(con, r["id"], did, "")
+            return ""
         saved = (sorted(set(audio_files(AUDITION)) - before) or [""])[0]
         n_ok += bool(saved); fail += not saved
         db.set_download(con, r["id"], did, saved)
@@ -106,8 +118,12 @@ def run(con, n, rip):
 
     if prog_mode:
         for i, r in enumerate(rows, 1):
+            desc = f"{r['artist']} - {r['title']}"
+            # "downloading" line BEFORE the track so the bar/label move while it
+            # downloads (done = tracks finished so far) instead of looking frozen.
+            print(f"DL\t{i - 1}\t{total}\t\t{desc}", flush=True)
             saved = _one(r)   # emit the saved path so the app can load it live
-            print(f"DL\t{i}\t{total}\t{saved}\t{r['artist']} - {r['title']}", flush=True)
+            print(f"DL\t{i}\t{total}\t{saved}\t{desc}", flush=True)
     else:                                             # downloads stay serial (ban-safe)
         with download_progress() as prog:
             task = prog.add_task("starting…", total=total)
