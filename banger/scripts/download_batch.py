@@ -18,7 +18,7 @@ import argparse, json, os, random, re, subprocess, sys, time, urllib.parse, urll
 from concurrent.futures import ThreadPoolExecutor
 import db
 import lyrics
-from _paths import AUDITION, audio_files, write_m3u
+from _paths import AUDITION, audio_files, norm, write_m3u
 from _ui import console, ok, download_progress
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -33,8 +33,6 @@ def _safe_lyrics(path, artist, title):
         pass
 
 
-def norm(s):
-    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
 def _clean(title):

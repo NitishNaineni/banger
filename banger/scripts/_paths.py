@@ -11,6 +11,7 @@ this pipeline inside the app can be rebuilt/updated without touching user data:
     $BANGER_CONFIG (default ~/.config/banger/config.toml)     Deezer ARL + LB token
 """
 import os
+import re
 
 HOME = os.path.expanduser("~")
 
@@ -28,6 +29,11 @@ CONFIG = os.environ.get("BANGER_CONFIG") or os.path.join(
     os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "banger", "config.toml")
 
 AUDIO_EXT = (".flac", ".mp3", ".m4a", ".ogg", ".opus")
+
+
+def norm(s: str) -> str:
+    """Lowercase + strip everything but [a-z0-9], for fuzzy artist/title matching."""
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
 def load_config() -> dict:

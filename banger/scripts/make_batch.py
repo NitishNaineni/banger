@@ -13,7 +13,7 @@ Usage:
 """
 import argparse, json, os, subprocess, tempfile, urllib.request
 import db
-from _paths import load_config
+from _paths import load_config, norm
 from _ui import console, ok, warn
 
 TROI = os.path.join(os.path.dirname(__file__), "..", ".venv", "bin", "troi")
@@ -91,8 +91,6 @@ def main():
     picked, batch = set(), []
 
     def take(recs, limit):
-        import re
-        norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
         for r in recs:
             key = r["mbid"] or (norm(r["title"]), norm(r["artist"]))
             if not r["title"] or key in picked or (r["mbid"] and r["mbid"] in seen):
