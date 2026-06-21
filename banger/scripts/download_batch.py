@@ -17,12 +17,20 @@ Usage:
 import argparse, json, os, random, re, subprocess, sys, time, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 import db
+import lyrics
 from _paths import AUDITION, audio_files, write_m3u
 from _ui import console, ok, download_progress
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SEARCH_WORKERS = 6          # safe parallel pool for the public search API
 RIP_TIMEOUT = 90            # per-track download timeout (s); skip a track that stalls
+
+
+def _safe_lyrics(path, artist, title):
+    try:
+        lyrics.process(path, artist, title)
+    except Exception:
+        pass
 
 
 def norm(s):
@@ -116,6 +124,16 @@ def run(con, n, rip):
         db.set_download(con, r["id"], did, saved)
         return saved
 
+    # Lyrics are independent network fetches, so run them in a pool that OVERLAPS the
+    # (serial, ban-safe) downloads — they finish "for free" while later tracks download
+    # instead of adding their time to the batch. QQ's client is per-thread, so this is safe.
+    lyric_pool = ThreadPoolExecutor(max_workers=6)
+    lyric_futs = []
+
+    def queue_lyrics(saved, r):
+        if saved:
+            lyric_futs.append(lyric_pool.submit(_safe_lyrics, saved, r["artist"], r["title"]))
+
     if prog_mode:
         for i, r in enumerate(rows, 1):
             desc = f"{r['artist']} - {r['title']}"
@@ -124,13 +142,17 @@ def run(con, n, rip):
             print(f"DL\t{i - 1}\t{total}\t\t{desc}", flush=True)
             saved = _one(r)   # emit the saved path so the app can load it live
             print(f"DL\t{i}\t{total}\t{saved}\t{desc}", flush=True)
+            queue_lyrics(saved, r)
     else:                                             # downloads stay serial (ban-safe)
         with download_progress() as prog:
             task = prog.add_task("starting…", total=total)
             for r in rows:
                 prog.update(task, description=f"{r['artist']} – {r['title']}"[:42])
-                _one(r)
+                saved = _one(r)
+                queue_lyrics(saved, r)
                 prog.advance(task)
+
+    lyric_pool.shutdown(wait=True)   # let the overlapping lyric fetches finish
 
     db.mark_downloaded(con, n)
     con.commit()

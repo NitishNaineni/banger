@@ -3,6 +3,7 @@ namespace G4 {
     public class PlayBar : Gtk.Box {
         private Gtk.Scale _seek = new Gtk.Scale (Gtk.Orientation.HORIZONTAL, null);
         private PeakBar _peak = new PeakBar ();
+        private LyricsBar _lyrics = new LyricsBar ();
         private Gtk.Label _positive = new Gtk.Label ("0:00");
         private Gtk.Label _negative = new Gtk.Label ("0:00");
         private Gtk.ToggleButton _repeat = new Gtk.ToggleButton ();
@@ -26,42 +27,51 @@ namespace G4 {
             var app = (Application) GLib.Application.get_default ();
             var player = app.player;
 
-            _seek.set_range (0, _duration);
-            _seek.halign = Gtk.Align.FILL;
-            append (_seek);
-            setup_seek_bar (player);
+            // Row 1: karaoke lyrics.
+            append (_lyrics);
+            app.music_changed.connect (_lyrics.load_for);
+            _lyrics.load_for (app.current_music);
 
-            var times = new Gtk.CenterBox ();
-            times.baseline_position = Gtk.BaselinePosition.CENTER;
-            times.halign = Gtk.Align.FILL;
-            times.set_start_widget (_positive);
-            times.set_end_widget (_negative);
-
-            var overlay = new Gtk.Overlay ();
-            overlay.child = times;
-            overlay.add_overlay (_peak);
-            append (overlay);
-
-            _peak.align = Pango.Alignment.CENTER;
-            _peak.halign = Gtk.Align.CENTER;
-            _peak.width_request = 168;
-            _peak.add_css_class ("dim-label");
-
-            _positive.halign = Gtk.Align.START;
-            _positive.margin_start = 12;
+            // Row 2: 1:30 ──o── 3:00 — the elapsed/total times flank the seek bar, placed
+            // below the lyrics block.
             _positive.add_css_class ("dim-label");
             _positive.add_css_class ("numeric");
-
-            _negative.halign = Gtk.Align.END;
-            _negative.margin_end = 12;
             _negative.add_css_class ("dim-label");
             _negative.add_css_class ("numeric");
-
             make_widget_clickable (_negative).pressed.connect (() => remain_progress = !remain_progress);
 
-            var buttons = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 16);
+            _seek.set_range (0, _duration);
+            _seek.hexpand = true;
+            _seek.halign = Gtk.Align.FILL;
+            _seek.valign = Gtk.Align.CENTER;
+
+            var seek_row = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
+            seek_row.halign = Gtk.Align.FILL;
+            seek_row.margin_start = 12;
+            seek_row.margin_end = 12;
+            seek_row.margin_top = 8;
+            seek_row.append (_positive);
+            seek_row.append (_seek);
+            seek_row.append (_negative);
+            append (seek_row);
+            setup_seek_bar (player);
+
+            // Uniform 40px cells make the group mirror-symmetric — 40,40,40,[48],40,40,40
+            // — so the play button is the exact geometric centre of the group.
+            _dislike.width_request = 40;
+            _repeat.width_request = 40;
+            _prev.width_request = 40;
+            _next.width_request = 40;
+            _volume.width_request = 40;
+            _like.width_request = 40;
+
+            // All seven controls in ONE group, and the group is centred. Per the GTK
+            // docs, halign=CENTER allocates the box its natural width centred within the
+            // bar, so the space to the left of dislike always equals the space to the
+            // right of like, and (being mirror-symmetric) play lands dead-centre.
+            var buttons = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 4);
             buttons.halign = Gtk.Align.CENTER;
-            buttons.margin_top = 16;
+            buttons.margin_top = 12;
             buttons.append (_dislike);
             buttons.append (_repeat);
             buttons.append (_prev);
@@ -161,8 +171,6 @@ namespace G4 {
         }
 
         public void on_size_changed (int bar_width, int bar_spacing) {
-            var text_width = int.max (_positive.get_width (), _negative.get_width ());
-            _peak.width_request = bar_width - (text_width + _positive.margin_start + _negative.margin_end) * 2;
             get_last_child ()?.set_margin_top (bar_spacing);
         }
 
@@ -282,6 +290,7 @@ namespace G4 {
                 if (_remain_progress)
                     _negative.label = "-" + format_time (_duration - _position);
             }
+            _lyrics.set_position (value);
             _seek.set_value (value);
         }
     }

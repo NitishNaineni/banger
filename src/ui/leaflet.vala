@@ -1,7 +1,10 @@
 namespace G4 {
 
     namespace ContentWidth {
-        public const int MIN = 340;
+        // 400 so the now-playing pane keeps the same minimum width in the combined
+        // (two-pane) view as it has in the compact view — below that the transport row
+        // and cover layout start to clip.
+        public const int MIN = 400;
         public const int MAX = 480;
     }
 

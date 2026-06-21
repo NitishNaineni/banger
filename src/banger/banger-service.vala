@@ -46,6 +46,10 @@ namespace G4 {
         private File _library = File.new_build_filename (Environment.get_home_dir (), "Music", "library");
         private File _audition = File.new_build_filename (Environment.get_home_dir (), "Music", "audition");
 
+        private FileMonitor? _lib_monitor = null;
+        private uint _sync_timer = 0;
+        private bool _syncing = false;
+
         // basename -> rating cache changed; play-bar re-syncs its toggles.
         public signal void labels_changed ();
         // the audition/library folders changed; the custom tabs re-scan.
@@ -59,11 +63,85 @@ namespace G4 {
             _script = Path.build_filename (_home, "scripts", "banger_api.py");
             var uv = Environment.find_program_in_path ("uv");
             _uv = uv ?? Path.build_filename (Environment.get_home_dir (), ".local", "bin", "uv");
-            // retry any cached (offline) feedback whenever the network comes back
+            // retry any cached (offline/failed) feedback whenever the network comes
+            // back — and once now on startup, so a rating made offline last session
+            // (or one that failed) is guaranteed to reach ListenBrainz at some point.
             NetworkMonitor.get_default ().network_changed.connect ((available) => {
                 if (available)
                     flush_feedback.begin ((obj, res) => flush_feedback.end (res));
             });
+            flush_feedback.begin ((obj, res) => flush_feedback.end (res));
+
+            // Watch the library folder so FLACs copied/synced straight into it (file
+            // manager, or Syncthing from the phone) get officially imported in place —
+            // lyrics fetched + recorded as liked — with no explicit action.
+            try {
+                _lib_monitor = _library.monitor_directory (FileMonitorFlags.WATCH_MOVES);
+                ((!) _lib_monitor).changed.connect ((file, other, ev) => {
+                    if (ev == FileMonitorEvent.CREATED || ev == FileMonitorEvent.MOVED_IN
+                        || ev == FileMonitorEvent.RENAMED || ev == FileMonitorEvent.CHANGES_DONE_HINT)
+                        schedule_sync ();
+                });
+            } catch (Error e) {
+            }
+            schedule_sync ();   // reconcile anything added while the app was closed
+        }
+
+        // Coalesce a burst of file events (a multi-file copy / Syncthing batch) into one
+        // reconcile a moment after the last change.
+        private void schedule_sync () {
+            if (_sync_timer != 0)
+                Source.remove (_sync_timer);
+            _sync_timer = Timeout.add (1500, () => {
+                _sync_timer = 0;
+                sync_library.begin ((o, r) => sync_library.end (r));
+                return Source.REMOVE;
+            });
+        }
+
+        // Officially import any library FLAC not yet a known liked track (lyrics + DB),
+        // in place — then refresh the library views.
+        public async void sync_library () {
+            if (!available || _syncing)
+                return;
+            _syncing = true;
+            bool ok = false;
+            int imported = 0;
+            var added = new GenericArray<string> ();
+            try {
+                var proc = new Subprocess.newv (api_argv ({ "sync" }),
+                    SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_SILENCE);
+                var stream = new DataInputStream ((!) proc.get_stdout_pipe ());
+                string? line = null;
+                while ((line = yield stream.read_line_async ()) != null) {
+                    var f = ((!) line).split ("\t");
+                    if (f[0] == "ok")
+                        ok = f.length > 1 && f[1] == "true";
+                    else if (f[0] == "imported" && f.length > 1)
+                        imported = int.parse (f[1]);
+                    else if (f[0] == "path" && f.length > 1)
+                        added.add (f[1]);
+                }
+                yield proc.wait_async ();
+            } catch (Error e) {
+                warning ("banger sync: %s", e.message);
+            }
+            _syncing = false;
+            if (!ok || imported == 0)
+                return;
+            var app = GLib.Application.get_default () as Application;
+            if (app != null && added.length > 0) {
+                File[] files = {};
+                foreach (unowned var p in added)
+                    files += File.new_for_path (p);
+                var arr = new GenericArray<Music> ();
+                yield ((!) app).loader.load_files_async (files, arr, true, false, -1);
+                ((!) app).notify_library_changed ();
+            }
+            yield load_labels ();
+            lists_changed ();
+            toast (imported == 1 ? _("Imported 1 new track into your library")
+                                 : _("Imported %d new tracks into your library").printf (imported));
         }
 
         // Ship any like/dislike feedback that couldn't reach ListenBrainz earlier
@@ -184,6 +262,7 @@ namespace G4 {
                     }
                     yield src.copy_async (dst, FileCopyFlags.OVERWRITE);
                 }
+                // (lyrics ride inside the FLAC's LYRICS tag, so the copy carries them)
                 // Load the library copy into the library model (Artists/Albums)
                 // WITHOUT splicing into the play queue, then refresh those views.
                 var app = GLib.Application.get_default () as Application;
@@ -227,6 +306,7 @@ namespace G4 {
             if (!lib.query_exists ())
                 return;
             var aud = _audition.get_child (name);
+            var aud_existed = aud.query_exists ();
             var app = GLib.Application.get_default () as Application;
             if (app != null) {
                 var track = ((!) app).loader.find_cache (lib.get_uri ());
@@ -234,7 +314,7 @@ namespace G4 {
                     ((!) app).loader.library.remove_music ((!) track);
             }
             try {
-                if (aud.query_exists ())
+                if (aud_existed)
                     yield lib.delete_async ();
                 else
                     lib.move (aud, FileCopyFlags.NONE);   // old batch -> back to audition
@@ -325,6 +405,53 @@ namespace G4 {
             _refresh_proc = null;
             yield load_labels ();
             return ok;
+        }
+
+        // Download a track from a (possibly shortened) Deezer link straight into the
+        // library as a liked track, with its lyrics; then refresh the library views.
+        public async void add_from_link (string url) {
+            if (!available) {
+                toast (_("Music discovery isn't set up"));
+                return;
+            }
+            bool ok = false;
+            string name = "";
+            var paths = new GenericArray<string> ();
+            try {
+                var proc = new Subprocess.newv (api_argv ({ "add", "--url", url }),
+                    SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_SILENCE);
+                var stream = new DataInputStream ((!) proc.get_stdout_pipe ());
+                string? line = null;
+                while ((line = yield stream.read_line_async ()) != null) {
+                    var f = ((!) line).split ("\t");
+                    if (f[0] == "ok")
+                        ok = f.length > 1 && f[1] == "true";
+                    else if (f[0] == "error" && f.length > 1)
+                        toast (f[1]);
+                    else if (f[0] == "name" && f.length > 1)
+                        name = f[1];
+                    else if (f[0] == "path" && f.length > 1)
+                        paths.add (f[1]);
+                }
+                yield proc.wait_async ();
+            } catch (Error e) {
+                warning ("banger add: %s", e.message);
+            }
+            if (!ok)
+                return;
+            var app = GLib.Application.get_default () as Application;
+            if (app != null && paths.length > 0) {
+                File[] files = {};
+                foreach (unowned var p in paths)
+                    files += File.new_for_path (p);
+                var arr = new GenericArray<Music> ();
+                yield ((!) app).loader.load_files_async (files, arr, true, false, -1);
+                ((!) app).notify_library_changed ();
+            }
+            yield load_labels ();
+            lists_changed ();
+            toast (name.length > 0 ? _("Added “%s” to your library").printf (name)
+                                   : _("Added to your library"));
         }
 
         // Kill any running download tree — call on a new refresh or on app shutdown.

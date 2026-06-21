@@ -17,6 +17,9 @@ namespace G4 {
 
             this.icon_name = app.application_id;
             this.title = app.name;
+            // ContentWidth.MIN (400) is the smallest width at which the now-playing
+            // transport row + cover stay fully visible; using the same constant keeps the
+            // compact window and the combined-view pane at an identical minimum.
             this.width_request = ContentWidth.MIN;
             this.close_request.connect (on_close_request);
 
@@ -29,6 +32,7 @@ namespace G4 {
                 { ACTION_BUTTON, button_command, "s" },
                 { ACTION_REMOVE, remove_from_list, "s" },
                 { ACTION_SAVE_LIST, save_list },
+                { "add-link", add_from_deezer },
                 { ACTION_SEARCH, search_by, "as" },
                 { ACTION_SELECT, start_select },
                 { ACTION_TOGGLE_SEARCH, toggle_search },
@@ -279,6 +283,36 @@ namespace G4 {
 
         private void save_list () {
             _store_panel.save_if_modified (false);
+        }
+
+        // banger: paste a Deezer link to download a track straight into the library.
+        private void add_from_deezer () {
+            var entry = new Gtk.Entry ();
+            entry.hexpand = true;
+            entry.activates_default = true;
+            entry.input_purpose = Gtk.InputPurpose.URL;
+            entry.placeholder_text = "https://link.deezer.com/…";
+            var dialog = new Adw.AlertDialog (_("Add from Deezer Link"),
+                _("Paste a Deezer track, album or playlist link to add it to your library."));
+            dialog.set_extra_child (entry);
+            dialog.add_response ("cancel", _("Cancel"));
+            dialog.add_response ("add", _("Add"));
+            dialog.set_response_appearance ("add", Adw.ResponseAppearance.SUGGESTED);
+            dialog.set_default_response ("add");
+            dialog.set_close_response ("cancel");
+            dialog.response.connect ((response) => {
+                if (response != "add")
+                    return;
+                var url = entry.text.strip ();
+                if (url.length == 0)
+                    return;
+                show_toast (_("Adding from Deezer…"));
+                BangerService.instance.add_from_link.begin (url, (obj, res) => {
+                    BangerService.instance.add_from_link.end (res);
+                });
+            });
+            dialog.present (this);
+            entry.grab_focus ();
         }
 
         private void search_by (SimpleAction action, Variant? parameter) {

@@ -98,6 +98,10 @@
     </submenu>
     <section>
       <item>
+        <attribute name="label" translatable="yes">_Add from Deezer Link…</attribute>
+        <attribute name="action">win.add-link</attribute>
+      </item>
+      <item>
         <attribute name="label" translatable="yes">_Reload Library</attribute>
         <attribute name="action">app.reload</attribute>
       </item>

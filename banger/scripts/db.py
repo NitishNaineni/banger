@@ -48,6 +48,16 @@ def connect():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     con.executescript(SCHEMA)
+    # lb_sent = the score currently reflected on ListenBrainz (1 loved / -1 hated /
+    # NULL nothing). The feedback flusher reconciles the desired score (from `label`)
+    # against this, so love/hate/clear all retry until delivered. Migrate older DBs:
+    # rows already delivered (feedback=1) start in sync with their label's score.
+    cols = {r[1] for r in con.execute("PRAGMA table_info(tracks)")}
+    if "lb_sent" not in cols:
+        con.execute("ALTER TABLE tracks ADD COLUMN lb_sent INTEGER")
+        con.execute("UPDATE tracks SET lb_sent = CASE label WHEN 'like' THEN 1 "
+                    "WHEN 'dislike' THEN -1 ELSE NULL END WHERE feedback = 1")
+        con.commit()
     return con
 
 
@@ -103,6 +113,20 @@ def set_label(con, track_id, label, file):
 
 def liked_with_files(con):
     return con.execute("SELECT * FROM tracks WHERE label='like' AND file != ''").fetchall()
+
+
+def add_manual(con, artist, title, album, deezer_id, file, mbid):
+    """Record a track added by hand (Deezer link) straight into the library as liked."""
+    con.execute(
+        "INSERT OR IGNORE INTO tracks(mbid, artist, title, album, deezer_id, file, label) "
+        "VALUES (?,?,?,?,?,?, 'like')",
+        (mbid, artist, title, album, deezer_id, file))
+    con.execute(
+        "UPDATE tracks SET label='like', file=?, deezer_id=?, feedback=0, "
+        "updated_at=datetime('now') "
+        "WHERE COALESCE(NULLIF(mbid,''), artist || '|' || title) "
+        "    = COALESCE(NULLIF(?,''), ? || '|' || ?)",
+        (file, deezer_id, mbid, artist, title))
 
 
 def mark_feedback(con, track_id):

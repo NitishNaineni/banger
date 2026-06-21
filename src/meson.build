@@ -8,6 +8,7 @@ sources = [
   'banger/folder-list.vala',
   'banger/audition-page.vala',
   'banger/library-page.vala',
+  'banger/lyrics-bar.vala',
   'gst/ape-demux.c',
   'gst/gst-player.vala',
   'gst/peak-calculator.vala',

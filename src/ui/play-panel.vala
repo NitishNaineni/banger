@@ -38,8 +38,19 @@ namespace G4 {
             _app = app;
 
             _play_bar.halign = Gtk.Align.FILL;
+            // The play bar takes the vertical slack so its lyrics block can grow into it;
+            // the cover is a fixed square at the top and the title sits right under it.
+            _play_bar.vexpand = true;
             _play_bar.position_seeked.connect (on_position_seeked);
             music_box.append (_play_bar);
+
+            music_cover.vexpand = false;
+            music_cover.valign = Gtk.Align.START;
+            var title_area = music_cover.get_next_sibling ();
+            if (title_area != null) {
+                ((!) title_area).vexpand = false;
+                ((!) title_area).valign = Gtk.Align.START;
+            }
 
             leaflet.bind_property ("folded", back_btn, "visible", BindingFlags.SYNC_CREATE);
 
@@ -108,12 +119,30 @@ namespace G4 {
         }
 
         public void size_to_change (int width, int height) {
+            // Symmetric cover: the largest SQUARE that fits, centred with EQUAL top/left/
+            // right margins. Diameter is capped by the width AND by the vertical room left
+            // after the header/title/play-bar (~360px), so it never overflows; the margin
+            // is then whatever's left over, split equally on all three sides.
+            // Symmetric to the window's TOP, left and right edges. The circle can't sit
+            // above the title bar, so the smallest the top-edge gap can be is the title-bar
+            // height — therefore that's the equal margin on all three sides, and the
+            // diameter is width − 2·header (capped by the vertical room for the controls).
+            var header = music_box.get_prev_sibling ();
+            var header_h = header != null && ((!) header).get_height () > 0
+                ? ((!) header).get_height () : 46;
+            var diameter = int.min (width - header_h * 2, height - header_h - 296);
+            diameter = diameter.clamp (160, width - header_h * 2);
+            var cover_margin = (width - diameter) / 2;
+            music_cover.margin_start = cover_margin;
+            music_cover.margin_end = cover_margin;
+            // top gap to the window edge = header_h + margin_top, kept equal to cover_margin
+            music_cover.margin_top = int.max (cover_margin - header_h, 0);
+            music_cover.height_request = diameter;
+            // match pixel_size to the box (the .ui pins it to 256) so the art fills it
+            music_cover.pixel_size = diameter;
+
             var max_size = int.max (width * 3 / 4, music_cover.pixel_size);
             var margin_horz = (width - max_size) / 2;
-            var margin_cover = int.max (margin_horz, 32);
-            music_cover.margin_start = margin_cover;
-            music_cover.margin_end = margin_cover;
-
             var margin_bar = int.max (margin_horz / 2, 16);
             var spacing = (height - 540).clamp (8, 16);
             _play_bar.margin_start = margin_bar;

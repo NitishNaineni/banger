@@ -8,6 +8,10 @@ dependencies = [
     "troi",        # ListenBrainz/Troi recommendation engine (LB Radio)
     "streamrip>=2.1",  # Deezer/Tidal/Qobuz downloader CLI
     "rich>=13",    # pretty/live terminal output
+    "requests>=2.31",  # lyrics providers (Kugou/NetEase/LRCLIB)
+    "mutagen>=1.46",   # embed lyrics into FLAC tags
+    "qqmusic-api-python",  # QQ Music word-level QRC (decrypts the buggy-DES lyrics)
+    "syncedlyrics",        # Musixmatch richsync word-level (single manual adds only)
 ]
 
 [tool.uv]
