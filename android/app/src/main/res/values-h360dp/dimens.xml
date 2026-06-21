@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tighter spacing for short / small screens (e.g. the 514dp-square Zinwa Q25), so
+     every view reclaims wasted padding and fits more content. Overrides the defaults
+     in values/dimens.xml; only applies on screens >=360dp tall but short enough to miss
+     the taller buckets. Conservative reductions — small/tiny are left untouched. -->
+<resources>
+    <dimen name="spacing_mid_medium">10dp</dimen>
+    <dimen name="spacing_medium">12dp</dimen>
+    <dimen name="spacing_mid_large">16dp</dimen>
+    <dimen name="spacing_large">18dp</dimen>
+</resources>
