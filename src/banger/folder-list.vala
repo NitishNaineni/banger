@@ -16,6 +16,10 @@ namespace G4 {
         private bool _loading = false;
         private bool _reload_pending = false;
         private uint _cooldown = 0;
+        // While true, rescans run but their results are NOT applied to the list. Used
+        // during the make_batch/clear phase of a refresh so an in-flight rescan (or one
+        // that ran while the old files still existed) can't repopulate the old batch.
+        protected bool suppress_updates = false;
         private Gdk.Paintable _placeholder;
 
         public signal void reloaded (uint count);
@@ -102,9 +106,11 @@ namespace G4 {
                 } catch (Error e) {
                 }
             });
+            _loading = false;
+            if (suppress_updates)   // refresh in its clearing phase: drop this stale scan
+                return;
             sort_music_array (found, sort_order);
             data_store.splice (0, data_store.get_n_items (), (Object[]) found.data);
-            _loading = false;
             reloaded (found.length);
         }
 

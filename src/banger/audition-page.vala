@@ -60,7 +60,10 @@ namespace G4 {
                 return;
             _refreshing = true;
             refreshing_changed (true);   // owner stops audition playback + clears the queue
-            data_store.remove_all ();    // clear the old batch from the list right away
+            // Empty the list AND ignore rescans until the new batch starts landing, so
+            // the old (not-yet-deleted) files can't repopulate during make_batch/clear.
+            suppress_updates = true;
+            data_store.remove_all ();
             _spinner.start ();
             _status.visible = true;
             _progress.fraction = 0;
@@ -71,6 +74,7 @@ namespace G4 {
             var id = banger.refresh_progress.connect ((msg, done, total) => {
                 _title.label = msg;
                 if (total > 0) {
+                    suppress_updates = false;   // download phase: old files are gone, show new ones live
                     _progress.fraction = (double) done / total;
                     var eta = "";
                     if (done > 0) {
@@ -91,6 +95,7 @@ namespace G4 {
                 _status.visible = false;
                 _refreshing = false;
                 refreshing_changed (false);
+                suppress_updates = false;   // done — let the final state show
                 reload ();
             });
         }
