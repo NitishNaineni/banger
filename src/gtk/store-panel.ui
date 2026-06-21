@@ -31,6 +31,17 @@
           </object>
         </child>
         <child type="start">
+          <object class="GtkButton" id="refresh_btn">
+            <property name="icon_name">view-refresh-symbolic</property>
+            <property name="visible">false</property>
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Refresh batch — download the next one</property>
+            <style>
+              <class name="flat"/>
+            </style>
+          </object>
+        </child>
+        <child type="start">
           <object class="GtkBox">
             <property name="orientation">horizontal</property>
             <property name="width-request">52</property>

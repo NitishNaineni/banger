@@ -41,8 +41,9 @@ namespace G4 {
         [GtkChild]
         private unowned Gtk.Stack stack_view;
 
+        [GtkChild]
+        private unowned Gtk.Button refresh_btn;
         private AuditionPage _audition_page;
-        private Gtk.Button _refresh_btn = new Gtk.Button.from_icon_name ("view-refresh-symbolic");
         private Stack _album_stack = new Stack ();
         private Stack _artist_stack = new Stack ();
         private Stack _playlist_stack = new Stack ();
@@ -93,17 +94,12 @@ namespace G4 {
             library.item_activated.connect ((pos, obj) => play_folder_list (library, (int) pos));
             stack_view.add_titled (library, PageName.LIBRARY, _("Library")).icon_name = "emblem-favorite-symbolic";
 
-            // Refresh lives in the top bar, shown only on the Audition tab.
-            _refresh_btn.add_css_class ("flat");
-            _refresh_btn.valign = Gtk.Align.CENTER;
-            _refresh_btn.tooltip_text = _("Refresh batch — download the next one");
-            _refresh_btn.visible = false;
-            _refresh_btn.sensitive = BangerService.instance.available;
-            _refresh_btn.clicked.connect (() => _audition_page.refresh ());
+            // Refresh lives in the top bar (defined in the .ui), shown only on Audition.
+            refresh_btn.sensitive = BangerService.instance.available;
+            refresh_btn.clicked.connect (() => _audition_page.refresh ());
             _audition_page.refreshing_changed.connect ((running) => {
-                _refresh_btn.sensitive = !running && BangerService.instance.available;
+                refresh_btn.sensitive = !running && BangerService.instance.available;
             });
-            header_bar.pack_start (_refresh_btn);
 
             _artist_list = create_artist_list ();
             _artist_stack.add (_artist_list, PageName.ARTIST);
@@ -224,7 +220,7 @@ namespace G4 {
                     var list = _current_list = (MusicList) value;
                     indicator.visible = _current_list.modified;
                     sort_btn.visible = _current_list == _main_list || _current_list is FolderList;
-                    _refresh_btn.visible = _current_list == _audition_page;
+                    refresh_btn.visible = _current_list == _audition_page;
                     update_sort_icon ();
                     _search_mode = SearchMode.ANY;
                     on_search_btn_toggled ();

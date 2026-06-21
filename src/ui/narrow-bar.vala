@@ -35,7 +35,10 @@ namespace G4 {
             }
             if (orientation == Gtk.Orientation.HORIZONTAL) {
                 _minimum_width = minimum;
-                minimum = _minimum_width / 2;
+                // Reserve no minimum width: when the header is crowded (narrow) this
+                // collapses to 0 instead of squeezing the header buttons, yet still
+                // expands to its natural width (the switcher) when there's room.
+                minimum = 0;
             }
         }
 
