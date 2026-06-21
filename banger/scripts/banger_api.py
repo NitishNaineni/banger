@@ -154,7 +154,7 @@ def cmd_refresh():
     _line("progress", "Generating next batch…")
     # A manageable audition batch — make_batch defaults to 100, which is far too
     # many to download + review per Refresh.
-    mk = subprocess.run([sys.executable, os.path.join(SCRIPTS, "make_batch.py"), "--size", "20"],
+    mk = subprocess.run([sys.executable, os.path.join(SCRIPTS, "make_batch.py"), "--size", "50"],
                         capture_output=True, text=True)
     con = db.connect()
     latest = db.latest_batch(con)
