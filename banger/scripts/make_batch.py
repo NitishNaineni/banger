@@ -133,7 +133,7 @@ def main():
     if not batch:
         warn("produced 0 tracks — check network / ListenBrainz availability")
     ok(f"batch [bold]#{n}[/]  ·  [green]{len(batch)}[/] tracks  ·  [dim]{source}[/]")
-    print(n)   # last line = batch number, for cycle.py
+    print(n)   # last line = the batch number (for standalone/CLI use)
 
 
 if __name__ == "__main__":
