@@ -1,59 +1,46 @@
 /*
  * banger — the Audition tab.
  *
- * A self-scanning list of the current batch (~/Music/audition) with a header:
- * a Refresh icon, the batch number + song count, and (while a batch downloads)
- * an inline progress bar with n/total · ETA · current track.
+ * A clean, self-scanning list of the current batch (~/Music/audition). Refresh
+ * lives in the top bar (added by the store-panel); while a batch downloads, a
+ * status block sized exactly like a song row appears at the top of the list with
+ * a spinner, the current track, a progress bar and ETA.
  */
 namespace G4 {
 
     public class AuditionPage : FolderList {
-        private Gtk.Button _refresh = new Gtk.Button.from_icon_name ("view-refresh-symbolic");
-        private Gtk.Label _info = new Gtk.Label ("");
+        private Gtk.Box _status = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 0);
+        private Gtk.Spinner _spinner = new Gtk.Spinner ();
+        private Gtk.Label _title = new Gtk.Label ("");
         private Gtk.ProgressBar _progress = new Gtk.ProgressBar ();
-        private int _batch = 0;
         private int64 _start = 0;
+        private bool _refreshing = false;
+
+        public bool refreshing { get { return _refreshing; } }
+        public signal void refreshing_changed (bool running);
 
         public AuditionPage (Application app) {
             base (app, File.new_build_filename (Environment.get_home_dir (), "Music", "audition"), "audition-sort");
 
-            var header = new Gtk.Box (Gtk.Orientation.VERTICAL, 4);
-            header.add_css_class ("toolbar");
-            var row = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
-            _refresh.add_css_class ("flat");
-            _refresh.tooltip_text = _("Refresh batch — download the next one");
-            _refresh.clicked.connect (on_refresh);
-            row.append (_refresh);
-            _info.add_css_class ("dim-label");
-            _info.halign = Gtk.Align.START;
-            _info.hexpand = true;
-            _info.ellipsize = Pango.EllipsizeMode.END;
-            row.append (_info);
-            header.append (row);
+            // A status block matching a song row: [48px spinner] [title + progress].
+            _spinner.set_size_request (48, 48);
+            _spinner.margin_top = _spinner.margin_bottom = 4;
+            _spinner.margin_start = 4;
+            _status.append (_spinner);
+            var vbox = new Gtk.Box (Gtk.Orientation.VERTICAL, 3);
+            vbox.margin_start = 12;
+            vbox.margin_end = 12;
+            vbox.hexpand = true;
+            vbox.valign = Gtk.Align.CENTER;
+            _title.halign = Gtk.Align.START;
+            _title.ellipsize = Pango.EllipsizeMode.END;
+            _title.add_css_class ("heading");
+            vbox.append (_title);
             _progress.show_text = true;
             _progress.ellipsize = Pango.EllipsizeMode.END;
-            _progress.visible = false;
-            header.append (_progress);
-            prepend (header);
-
-            if (!BangerService.instance.available)
-                _refresh.sensitive = false;
-            reloaded.connect ((n) => set_info (n));
-            map.connect (update_info);
-        }
-
-        private void update_info () {
-            BangerService.instance.get_status.begin ((obj, res) => {
-                var s = BangerService.instance.get_status.end (res);
-                _batch = s.batch_number;
-                set_info (data_store.get_n_items ());
-            });
-        }
-
-        private void set_info (uint count) {
-            _info.label = _batch > 0
-                ? _("Batch #%d   ·   %u songs").printf (_batch, count)
-                : _("No batch yet");
+            vbox.append (_progress);
+            _status.visible = false;
+            prepend (_status);
         }
 
         private string format_eta (double seconds) {
@@ -65,15 +52,22 @@ namespace G4 {
             return _("~%ds left").printf (int.max (s, 1));
         }
 
-        private void on_refresh () {
-            _refresh.sensitive = false;
-            _info.visible = false;
-            _progress.visible = true;
+        // Download the next batch (driven from the top-bar Refresh button).
+        public void refresh () {
+            var banger = BangerService.instance;
+            if (_refreshing || !banger.available)
+                return;
+            _refreshing = true;
+            refreshing_changed (true);
+            _spinner.start ();
+            _status.visible = true;
             _progress.fraction = 0;
+            _title.label = _("Refreshing batch…");
             _progress.text = _("Starting…");
             _start = GLib.get_monotonic_time ();
-            var banger = BangerService.instance;
+
             var id = banger.refresh_progress.connect ((msg, done, total) => {
+                _title.label = msg;
                 if (total > 0) {
                     _progress.fraction = (double) done / total;
                     var eta = "";
@@ -81,20 +75,21 @@ namespace G4 {
                         var elapsed = (GLib.get_monotonic_time () - _start) / 1e6;
                         eta = "   ·   " + format_eta (elapsed * (total - done) / done);
                     }
-                    _progress.text = @"$done/$total$eta   ·   $msg";
+                    _progress.text = @"$done / $total$eta";
+                    reload ();   // surface downloaded tracks live
                 } else {
                     _progress.pulse ();
-                    _progress.text = msg;
+                    _progress.text = "";
                 }
             });
             banger.refresh.begin ((obj, res) => {
                 banger.refresh.end (res);
                 banger.disconnect (id);
-                _progress.visible = false;
-                _info.visible = true;
-                _refresh.sensitive = true;
+                _spinner.stop ();
+                _status.visible = false;
+                _refreshing = false;
+                refreshing_changed (false);
                 reload ();
-                update_info ();
             });
         }
     }
