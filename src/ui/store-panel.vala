@@ -89,9 +89,14 @@ namespace G4 {
             // banger: Audition (current batch) + Library (likes) — self-contained tabs.
             _audition_page = new AuditionPage (_app);
             _audition_page.item_activated.connect ((pos, obj) => play_folder_list (_audition_page, (int) pos));
+            // The play queue is a snapshot of a folder list; once that list's content
+            // changes, drop the "already queued" fast-path so the next click re-mirrors
+            // the CURRENT list (not a stale/deleted one).
+            _audition_page.reloaded.connect (() => { _queued_list = null; });
             stack_view.add_titled (_audition_page, PageName.AUDITION, _("Audition")).icon_name = "starred-symbolic";
             var library = new LibraryPage (_app);
             library.item_activated.connect ((pos, obj) => play_folder_list (library, (int) pos));
+            library.reloaded.connect (() => { _queued_list = null; });
             stack_view.add_titled (library, PageName.LIBRARY, _("Library")).icon_name = "emblem-favorite-symbolic";
 
             // Refresh lives in the top bar (defined in the .ui), shown only on Audition.
@@ -99,6 +104,14 @@ namespace G4 {
             refresh_btn.clicked.connect (() => _audition_page.refresh ());
             _audition_page.refreshing_changed.connect ((running) => {
                 refresh_btn.sensitive = !running && BangerService.instance.available;
+                // A refresh is about to DELETE the current audition batch. If the play
+                // queue is that batch, clear it now + stop playback, so the player never
+                // walks the deleted files (which would spam ~100 error toasts).
+                if (running && _queued_list == _audition_page) {
+                    _app.music_queue.remove_all ();
+                    _app.player.pause ();
+                    _queued_list = null;
+                }
             });
 
             _artist_list = create_artist_list ();

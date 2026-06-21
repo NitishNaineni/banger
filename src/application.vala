@@ -619,8 +619,20 @@ namespace G4 {
             }
         }
 
+        private int _error_run = 0;
+
         private void on_player_error (Error err) {
-            Window.get_default ()?.show_toast (err.message);
+            // Guard against cascading through a run of unplayable files (e.g. a batch
+            // deleted under the queue): toast once, and after a few in a row stop
+            // instead of auto-advancing through all of them (which spammed ~100 toasts).
+            _error_run += 1;
+            if (_error_run == 1)
+                Window.get_default ()?.show_toast (err.message);
+            if (_error_run >= 4) {
+                _error_run = 0;
+                _player.pause ();
+                return;
+            }
             if (!_player.gapless) {
                 on_player_end ();
             }
@@ -644,6 +656,8 @@ namespace G4 {
         private uint _inhibit_id = 0;
 
         private void on_player_state_changed (Gst.State state) {
+            if (state == Gst.State.PLAYING)
+                _error_run = 0;   // a track is playing fine -> clear the dead-file guard
             if (state == Gst.State.PLAYING && _inhibit_id == 0) {
                 _inhibit_id = this.inhibit (Window.get_default (), Gtk.ApplicationInhibitFlags.SUSPEND, _("Keep playing"));
             } else if (state != Gst.State.PLAYING && _inhibit_id != 0) {

@@ -14,6 +14,8 @@ namespace G4 {
         protected uint sort_order = SortMode.TITLE;
         private HashTable<string, Music> _cache = new HashTable<string, Music> (str_hash, str_equal);
         private bool _loading = false;
+        private bool _reload_pending = false;
+        private uint _cooldown = 0;
         private Gdk.Paintable _placeholder;
 
         public signal void reloaded (uint count);
@@ -41,10 +43,28 @@ namespace G4 {
         }
 
         // Re-scan the folder and refresh the list (tags parsed off the main thread,
-        // cached by uri so repeat scans are instant).
+        // cached by uri so repeat scans are instant). Leading-edge + cooldown: the
+        // first call runs immediately, a burst (e.g. a 70-track refresh firing per
+        // track) collapses into one trailing rescan instead of thrashing the view.
         public void reload () {
-            if (!_loading)
-                do_reload.begin ((obj, res) => do_reload.end (res));
+            if (_loading || _cooldown != 0) {
+                _reload_pending = true;
+                return;
+            }
+            run_reload ();
+        }
+
+        private void run_reload () {
+            _reload_pending = false;
+            do_reload.begin ((obj, res) => {
+                do_reload.end (res);
+                _cooldown = Timeout.add (300, () => {
+                    _cooldown = 0;
+                    if (_reload_pending)
+                        run_reload ();
+                    return Source.REMOVE;
+                });
+            });
         }
 
         private async void do_reload () {
