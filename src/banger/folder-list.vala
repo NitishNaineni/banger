@@ -42,6 +42,11 @@ namespace G4 {
             map.connect (reload);
         }
 
+        // True if `music` is a file inside this list's folder.
+        public bool owns (Music music) {
+            return music.uri.has_prefix (folder.get_uri () + "/");
+        }
+
         // Re-scan the folder and refresh the list (tags parsed off the main thread,
         // cached by uri so repeat scans are instant). Leading-edge + cooldown: the
         // first call runs immediately, a burst (e.g. a 70-track refresh firing per

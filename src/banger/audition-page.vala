@@ -59,7 +59,8 @@ namespace G4 {
             if (_refreshing || !banger.available)
                 return;
             _refreshing = true;
-            refreshing_changed (true);
+            refreshing_changed (true);   // owner stops audition playback + clears the queue
+            data_store.remove_all ();    // clear the old batch from the list right away
             _spinner.start ();
             _status.visible = true;
             _progress.fraction = 0;

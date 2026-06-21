@@ -104,13 +104,17 @@ namespace G4 {
             refresh_btn.clicked.connect (() => _audition_page.refresh ());
             _audition_page.refreshing_changed.connect ((running) => {
                 refresh_btn.sensitive = !running && BangerService.instance.available;
-                // A refresh is about to DELETE the current audition batch. If the play
-                // queue is that batch, clear it now + stop playback, so the player never
-                // walks the deleted files (which would spam ~100 error toasts).
-                if (running && _queued_list == _audition_page) {
-                    _app.music_queue.remove_all ();
-                    _app.player.pause ();
-                    _queued_list = null;
+                // A refresh DELETES the whole audition batch. If we're currently PLAYING
+                // an audition track, stop playback and clear the play queue (which is that
+                // batch) so the player never walks the deleted files (~100 error toasts).
+                // Playing from Library is left running, untouched.
+                if (running) {
+                    var cur = _app.current_music;
+                    if (cur != null && _audition_page.owns ((!) cur)) {
+                        _app.player.pause ();
+                        _app.music_queue.remove_all ();
+                        _queued_list = null;
+                    }
                 }
             });
 
