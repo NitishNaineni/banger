@@ -230,16 +230,6 @@ def _resolve_deezer(url):
         return url
 
 
-def _flac_tags(path):
-    from mutagen.flac import FLAC
-    try:
-        a = FLAC(path)
-        g = lambda k: (a.get(k) or [""])[0]
-        return g("ARTIST"), g("TITLE"), g("ALBUM"), g("ISRC")
-    except Exception:
-        return "", "", "", ""
-
-
 def _mbid_from_isrc(isrc):
     """Best-effort recording MBID from the ISRC, so the add can be loved on LB."""
     if not isrc:
@@ -257,27 +247,47 @@ def _mbid_from_isrc(isrc):
         return ""
 
 
-def _mbid_from_file(path):
-    """Recording MBID for a FLAC: an embedded MusicBrainz id if present (precise),
-    else resolved from the ISRC. Used to let hand-added tracks reach ListenBrainz.
-    Only exact identifiers — never a fuzzy artist/title match, which could love the
-    wrong recording."""
+def _flac_info(path):
+    """Open a FLAC once -> (artist, title, album, mbid, has_lyrics). mbid = embedded
+    MusicBrainz recording id if present (precise), else resolved from the ISRC. Only
+    exact ids — never a fuzzy artist/title match, which could love the wrong recording
+    on LB. has_lyrics = whether the file already carries a LYRICS tag."""
     from mutagen.flac import FLAC
     try:
         a = FLAC(path)
-        for k in ("MUSICBRAINZ_TRACKID", "MUSICBRAINZ_RECORDINGID"):
-            v = (a.get(k) or [""])[0]
-            if v:
-                return v
-        return _mbid_from_isrc((a.get("ISRC") or [""])[0])
+        g = lambda k: (a.get(k) or [""])[0]
+        mbid = g("MUSICBRAINZ_TRACKID") or g("MUSICBRAINZ_RECORDINGID") or _mbid_from_isrc(g("ISRC"))
+        return g("ARTIST"), g("TITLE"), g("ALBUM"), mbid, bool(a.get("LYRICS"))
     except Exception:
-        return ""
+        return "", "", "", "", False
+
+
+def _mbid_from_file(path):
+    """Just the recording MBID — for callers (the LB flush) that only know the path."""
+    return _flac_info(path)[3]
+
+
+def _register_library_file(con, path, allow_slow, skip_lyrics_if_tagged):
+    """Officially import one library FLAC: fetch+embed lyrics if missing, record it as
+    a liked track, emit its 'path' line. One FLAC read (also resolves the recording
+    MBID for ListenBrainz). Returns 'Artist - Title' for the caller's summary."""
+    import lyrics
+    artist, title, album, mbid, has_lyrics = _flac_info(path)
+    desc = f"{artist} - {title}".strip(" -")
+    _line("progress", "Tagging " + desc)
+    if not (skip_lyrics_if_tagged and has_lyrics):   # keep the file's own lyrics if it has them
+        try:
+            lyrics.process(path, artist, title, allow_slow=allow_slow)
+        except Exception:
+            pass
+    db.add_manual(con, artist, title, album, "", path, mbid)
+    _line("path", path)
+    return desc
 
 
 def cmd_add(url):
     # Resolve the (possibly shortened) Deezer link, download straight into the library
     # as a liked track, fetch its lyrics, and record it. Progress lines like cmd_refresh.
-    import lyrics
     _line("progress", "Resolving link…")
     full = _resolve_deezer(url)
     if "deezer.com" not in full:
@@ -303,16 +313,8 @@ def cmd_add(url):
         return
     con = db.connect()
     first = ""
-    for f in new:
-        artist, title, album, isrc = _flac_tags(f)
-        desc = f"{artist} - {title}".strip(" -")
-        _line("progress", "Tagging " + desc)
-        try:
-            lyrics.process(f, artist, title, allow_slow=True)
-        except Exception:
-            pass
-        db.add_manual(con, artist, title, album, "", f, _mbid_from_file(f))
-        _line("path", f)
+    for f in new:   # fresh downloads: always fetch lyrics, allow the slow Musixmatch source
+        desc = _register_library_file(con, f, allow_slow=True, skip_lyrics_if_tagged=False)
         first = first or desc
     _flush_pending(con)   # love them on LB (resolves any missing mbid); retried later if offline
     con.commit()
@@ -328,8 +330,6 @@ def cmd_sync():
     # that isn't a known liked track yet is "officially imported" IN PLACE — lyrics
     # fetched + embedded if missing, recorded as liked. Lets the user just copy files
     # into the folder (file manager / Syncthing) and have the app pick them up.
-    import lyrics
-    from mutagen.flac import FLAC
     con = db.connect()
     known = {os.path.basename(r["file"]).lower()
              for r in con.execute("SELECT file FROM tracks WHERE label='like' AND file != ''")}
@@ -337,14 +337,8 @@ def cmd_sync():
     for f in audio_files(LIBRARY):
         if os.path.basename(f).lower() in known:
             continue
-        artist, title, album, isrc = _flac_tags(f)
-        try:
-            if not FLAC(f).get("LYRICS"):   # keep the file's own lyrics if it has them
-                lyrics.process(f, artist, title)
-        except Exception:
-            pass
-        db.add_manual(con, artist, title, album, "", f, _mbid_from_file(f))
-        _line("path", f)
+        # already-on-disk files: skip Musixmatch (could be many) and keep their own lyrics
+        _register_library_file(con, f, allow_slow=False, skip_lyrics_if_tagged=True)
         imported += 1
     if imported:
         _flush_pending(con)   # love them on LB (resolves missing mbids); retried later if offline
