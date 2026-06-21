@@ -1,0 +1,12 @@
+.flatpak-builder
+build
+builddir
+
+# banger sidecar: never commit secrets, local DB, venv or audio scratch
+banger/config.toml
+banger/data/*.db
+banger/data/*.db-*
+banger/.venv/
+banger/audition/
+**/__pycache__/
+*.pyc

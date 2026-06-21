@@ -1,12 +1,12 @@
-.flatpak-builder
-build
-builddir
+# Desktop build output (see also desktop/.gitignore)
+desktop/builddir/
 
-# banger sidecar: never commit secrets, local DB, venv or audio scratch
-banger/config.toml
-banger/data/*.db
-banger/data/*.db-*
-banger/.venv/
-banger/audition/
-**/__pycache__/
-*.pyc
+# Android (Gradle) build output
+android/**/build/
+android/.gradle/
+android/local.properties
+android/**/*.apk
+android/**/*.aab
+
+# Editor / OS
+.DS_Store
