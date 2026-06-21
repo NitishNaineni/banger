@@ -39,6 +39,7 @@ namespace G4 {
             _progress.show_text = true;
             _progress.ellipsize = Pango.EllipsizeMode.END;
             vbox.append (_progress);
+            _status.append (vbox);
             _status.visible = false;
             prepend (_status);
         }
