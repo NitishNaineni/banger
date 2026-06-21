@@ -62,8 +62,7 @@ namespace G4 {
             });
         }
 
-        // Load the lyrics for `music` from its sibling .lrc sidecar (same basename).
-        // Library copies may lack the sidecar, so fall back to the audition folder.
+        // Load the lyrics for `music` from the FLAC's embedded LYRICS tag (no sidecars).
         public void load_for (Music? music) {
             _scroll_anim?.pause ();
             _scroll_anim = null;
@@ -231,6 +230,11 @@ namespace G4 {
             return Source.CONTINUE;
         }
 
+        // px to fade at an edge: as much content as is scrolled past it, capped.
+        private static float edge_fade (float scrolled_past, float cap) {
+            return scrolled_past < cap ? scrolled_past : cap;
+        }
+
         // Soft-fade the top and bottom edges so lines scroll in/out gently. We mask the
         // content with a vertical alpha gradient (transparent at the very edges) — it's
         // background-independent, unlike painting the bg colour over the content.
@@ -249,8 +253,8 @@ namespace G4 {
             float below = (float) double.max (adj.upper - adj.page_size - adj.value, 0);
             float ft_max = h * 0.15f < 22f ? h * 0.15f : 22f;
             float fb_max = h * 0.18f < 30f ? h * 0.18f : 30f;
-            float ft = above < ft_max ? above : ft_max;
-            float fb = below < fb_max ? below : fb_max;
+            float ft = edge_fade (above, ft_max);
+            float fb = edge_fade (below, fb_max);
             if (ft < 1f && fb < 1f) {
                 base.snapshot (snapshot);
                 return;
