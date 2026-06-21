@@ -109,20 +109,14 @@ namespace G4 {
             int imported = 0;
             var added = new GenericArray<string> ();
             try {
-                var proc = new Subprocess.newv (api_argv ({ "sync" }),
-                    SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_SILENCE);
-                var stream = new DataInputStream ((!) proc.get_stdout_pipe ());
-                string? line = null;
-                while ((line = yield stream.read_line_async ()) != null) {
-                    var f = ((!) line).split ("\t");
+                yield stream_api ({ "sync" }, false, (f) => {
                     if (f[0] == "ok")
                         ok = f.length > 1 && f[1] == "true";
                     else if (f[0] == "imported" && f.length > 1)
                         imported = int.parse (f[1]);
                     else if (f[0] == "path" && f.length > 1)
                         added.add (f[1]);
-                }
-                yield proc.wait_async ();
+                });
             } catch (Error e) {
                 warning ("banger sync: %s", e.message);
             }
@@ -193,6 +187,30 @@ namespace G4 {
             string? sout = null;
             yield proc.communicate_utf8_async (null, null, out sout, null);
             return sout ?? "";
+        }
+
+        private delegate void LineFunc (string[] fields);
+
+        // Spawn the sidecar and stream its tab-separated stdout line by line through
+        // `handler`, then wait for exit. With `setsid_wrap` the sidecar runs as its own
+        // process group (kept in _refresh_proc) so cancel_refresh () can tear the whole
+        // uv/python/rip tree down. Shared by sync_library/refresh/add_from_link.
+        private async void stream_api (string[] cmd, bool setsid_wrap,
+                                       owned LineFunc handler) throws Error {
+            string[] argv = {};
+            if (setsid_wrap)
+                argv += "setsid";
+            foreach (unowned var a in api_argv (cmd))
+                argv += a;
+            var proc = new Subprocess.newv (argv,
+                SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_SILENCE);
+            if (setsid_wrap)
+                _refresh_proc = proc;
+            var stream = new DataInputStream ((!) proc.get_stdout_pipe ());
+            string? line = null;
+            while ((line = yield stream.read_line_async ()) != null)
+                handler (((!) line).split ("\t"));
+            yield proc.wait_async ();
         }
 
         private string basename_of (string uri) {
@@ -376,18 +394,9 @@ namespace G4 {
             bool ok = false;
             kill_stray_downloads ();   // clear an orphan from a previous app run
             try {
-                // setsid: run the sidecar as its own process group so cancel_refresh()
-                // can tear the whole uv/python/rip tree down (e.g. on app exit).
-                string[] argv = { "setsid" };
-                foreach (unowned var a in api_argv ({ "refresh" }))
-                    argv += a;
-                var proc = new Subprocess.newv (argv,
-                    SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_SILENCE);
-                _refresh_proc = proc;
-                var stream = new DataInputStream ((!) proc.get_stdout_pipe ());
-                string? line = null;
-                while ((line = yield stream.read_line_async ()) != null) {
-                    var f = ((!) line).split ("\t");
+                // setsid_wrap: run as its own process group so cancel_refresh() can tear
+                // the whole uv/python/rip tree down (e.g. on app exit).
+                yield stream_api ({ "refresh" }, true, (f) => {
                     if (f[0] == "progress" && f.length >= 2) {
                         int done = f.length >= 3 ? int.parse (f[2]) : 0;
                         int total = f.length >= 4 ? int.parse (f[3]) : 0;
@@ -397,8 +406,7 @@ namespace G4 {
                     } else if (f[0] == "error" && f.length > 1) {
                         toast (f[1]);
                     }
-                }
-                yield proc.wait_async ();
+                });
             } catch (Error e) {
                 warning ("banger refresh: %s", e.message);
             }
@@ -418,12 +426,7 @@ namespace G4 {
             string name = "";
             var paths = new GenericArray<string> ();
             try {
-                var proc = new Subprocess.newv (api_argv ({ "add", "--url", url }),
-                    SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_SILENCE);
-                var stream = new DataInputStream ((!) proc.get_stdout_pipe ());
-                string? line = null;
-                while ((line = yield stream.read_line_async ()) != null) {
-                    var f = ((!) line).split ("\t");
+                yield stream_api ({ "add", "--url", url }, false, (f) => {
                     if (f[0] == "ok")
                         ok = f.length > 1 && f[1] == "true";
                     else if (f[0] == "error" && f.length > 1)
@@ -432,8 +435,7 @@ namespace G4 {
                         name = f[1];
                     else if (f[0] == "path" && f.length > 1)
                         paths.add (f[1]);
-                }
-                yield proc.wait_async ();
+                });
             } catch (Error e) {
                 warning ("banger add: %s", e.message);
             }
