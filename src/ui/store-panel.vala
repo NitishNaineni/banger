@@ -94,6 +94,8 @@ namespace G4 {
             stack_view.add_titled (library, PageName.LIBRARY, _("Library")).icon_name = "emblem-favorite-symbolic";
 
             // Refresh lives in the top bar, shown only on the Audition tab.
+            _refresh_btn.add_css_class ("flat");
+            _refresh_btn.valign = Gtk.Align.CENTER;
             _refresh_btn.tooltip_text = _("Refresh batch — download the next one");
             _refresh_btn.visible = false;
             _refresh_btn.sensitive = BangerService.instance.available;
