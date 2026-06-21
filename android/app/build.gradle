@@ -152,7 +152,6 @@ dependencies {
 
     // Exoplayer (Vendored)
     implementation project(":media-lib-exoplayer")
-    implementation project(":media-lib-decoder-ffmpeg")
 
     // Image loading
     implementation 'io.coil-kt.coil3:coil-core:3.4.0'

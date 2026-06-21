@@ -29,7 +29,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
 import androidx.media3.exoplayer.BaseRenderer
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.RenderersFactory
@@ -659,7 +658,6 @@ class ExoPlaybackStateHolder(
             // battery/apk size/cache size]
             val audioRenderer = RenderersFactory { handler, _, audioListener, _, _ ->
                 arrayOf<BaseRenderer>(
-                    FfmpegAudioRenderer(handler, audioListener, replayGainProcessor),
                     MediaCodecAudioRenderer(
                         context,
                         MediaCodecSelector.DEFAULT,
