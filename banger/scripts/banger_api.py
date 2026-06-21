@@ -152,7 +152,9 @@ def cmd_refresh():
     # Generate the next batch FIRST; only clear audition once we actually have a
     # new batch to download (a make_batch failure must not empty the tab).
     _line("progress", "Generating next batch…")
-    mk = subprocess.run([sys.executable, os.path.join(SCRIPTS, "make_batch.py")],
+    # A manageable audition batch — make_batch defaults to 100, which is far too
+    # many to download + review per Refresh.
+    mk = subprocess.run([sys.executable, os.path.join(SCRIPTS, "make_batch.py"), "--size", "20"],
                         capture_output=True, text=True)
     con = db.connect()
     latest = db.latest_batch(con)
