@@ -141,7 +141,8 @@ def cmd_labels(con):
         _line(os.path.basename(r["file"]), r["label"])
 
 
-def cmd_label(con, path, rating):
+def cmd_label(con, path, rating, from_sync=False):
+    import labels_sync
     r = _find_track(con, path)
     if r is None:
         _line("ok", False)
@@ -154,6 +155,10 @@ def cmd_label(con, path, rating):
     con.execute("UPDATE tracks SET label=?, updated_at=datetime('now') WHERE id=?",
                 (label, r["id"]))
     con.commit()
+    # log the decision to the cross-device CRDT so the phone converges — unless this call
+    # is itself applying a change that came FROM the sync (avoid echoing it back).
+    if not from_sync:
+        labels_sync.record(r["artist"], r["title"], rating)
     flushed = _flush_pending(con)
     # keep the playlists in sync with the like/dislike just made
     write_m3u("Audition", AUDITION)
@@ -165,6 +170,32 @@ def cmd_label(con, path, rating):
 
 def cmd_flush(con):
     _line("flushed", _flush_pending(con))
+
+
+def cmd_reconcile_labels(con):
+    """Merge every device's CRDT log (last-writer-wins) and apply any decision that the
+    DB doesn't yet reflect — i.e. likes/dislikes made on the phone — then deliver them to
+    ListenBrainz. Desktop-made changes are already in the DB, so they show as no-ops."""
+    import labels_sync
+    merged = labels_sync.merge()
+    applied = 0
+    for k, (label, _ts, _dev) in merged.items():
+        row = con.execute(
+            "SELECT id, label FROM tracks WHERE lower(artist) || '|' || lower(title) = ?",
+            (k,)).fetchone()
+        if row is None:
+            continue                       # a track we don't have a row for — skip
+        want = label or "none"
+        if (row["label"] or "none") == want:
+            continue                       # already in sync
+        con.execute("UPDATE tracks SET label=?, updated_at=datetime('now') WHERE id=?",
+                    (None if want == "none" else want, row["id"]))
+        applied += 1
+    if applied:
+        con.commit()
+        _flush_pending(con)                # push the phone-originated changes to LB
+    _line("ok", True)
+    _line("applied", applied)
 
 
 def cmd_refresh():
@@ -357,8 +388,11 @@ def main():
     p_label = sub.add_parser("label")
     p_label.add_argument("--file", required=True)
     p_label.add_argument("--rating", required=True, choices=["like", "dislike", "none"])
+    p_label.add_argument("--from-sync", action="store_true",
+                         help="applying a change from the cross-device CRDT (don't re-log it)")
     sub.add_parser("refresh")
     sub.add_parser("flush")
+    sub.add_parser("reconcile-labels")
     p_add = sub.add_parser("add")
     p_add.add_argument("--url", required=True)
     sub.add_parser("sync")
@@ -379,7 +413,9 @@ def main():
     elif args.cmd == "labels":
         cmd_labels(con)
     elif args.cmd == "label":
-        cmd_label(con, args.file, args.rating)
+        cmd_label(con, args.file, args.rating, from_sync=args.from_sync)
+    elif args.cmd == "reconcile-labels":
+        cmd_reconcile_labels(con)
     elif args.cmd == "flush":
         cmd_flush(con)
     con.close()
