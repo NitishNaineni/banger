@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
+        android:id="@+id/action_banger_like"
+        android:icon="@drawable/ic_banger_like_24"
+        android:title="Like" />
+    <item
+        android:id="@+id/action_banger_dislike"
+        android:icon="@drawable/ic_banger_dislike_24"
+        android:title="Dislike" />
+    <item
         android:id="@+id/action_play"
         android:icon="@drawable/ic_play_24"
         android:title="@string/lbl_play" />

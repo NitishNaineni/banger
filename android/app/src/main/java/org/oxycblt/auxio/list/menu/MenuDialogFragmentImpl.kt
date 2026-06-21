@@ -70,6 +70,18 @@ class SongMenuDialogFragment : MenuDialogFragment<Menu.ForSong>() {
 
     override fun onClick(item: MenuItem, menu: Menu.ForSong) {
         when (item.itemId) {
+            R.id.action_banger_like ->
+                org.oxycblt.auxio.banger.BangerLabels.record(
+                    requireContext(),
+                    menu.song.artists.resolveNames(requireContext()),
+                    menu.song.name.resolve(requireContext()),
+                    "like")
+            R.id.action_banger_dislike ->
+                org.oxycblt.auxio.banger.BangerLabels.record(
+                    requireContext(),
+                    menu.song.artists.resolveNames(requireContext()),
+                    menu.song.name.resolve(requireContext()),
+                    "dislike")
             R.id.action_play -> playbackModel.playExplicit(menu.song, menu.playWith)
             R.id.action_shuffle -> playbackModel.shuffleExplicit(menu.song, menu.playWith)
             R.id.action_play_next -> {
