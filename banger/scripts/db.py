@@ -127,7 +127,3 @@ def add_manual(con, artist, title, album, deezer_id, file, mbid):
         "WHERE COALESCE(NULLIF(mbid,''), artist || '|' || title) "
         "    = COALESCE(NULLIF(?,''), ? || '|' || ?)",
         (file, deezer_id, mbid, artist, title))
-
-
-def mark_feedback(con, track_id):
-    con.execute("UPDATE tracks SET feedback=1 WHERE id=?", (track_id,))

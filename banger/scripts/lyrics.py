@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-lyrics.py — best-available synced lyrics for a track, written as an .lrc sidecar.
+lyrics.py — best-available synced lyrics for a track, embedded into the FLAC LYRICS tag.
 
 We download from Deezer, which has NO word-level lyrics. The reliable, NON-rate-
 limited way to get true per-word ("karaoke") timing — important because a refresh
 fetches lyrics for ~100 tracks at once — is to query the big karaoke catalogs that
 publish word-by-word data and don't throttle the way Musixmatch's anon token does:
 
-  word  : Kugou (krc) -> NetEase (yrc)   — per-word timing, converted to enhanced LRC
+  word  : QQ Music (qrc) -> Kugou (krc) -> NetEase (yrc)  — per-word, -> enhanced LRC
+          (+ Musixmatch richsync on single manual adds, where its rate limit is fine)
   line  : LRCLIB / NetEase (lrc)         — one timestamp per line
   plain : LRCLIB plain                   — no timestamps
   none  : nothing found
@@ -16,8 +17,8 @@ Enhanced-LRC output (what the desktop player parses for karaoke):
 
     [00:07.14]<00:07.14>One <00:07.50>look <00:07.80>give 'em whiplash
 
-The `.lrc` sidecar (same basename) is what the player reads and what Syncthing
-carries to the phone; the FLAC LYRICS tag is set too so the file is self-contained.
+This goes into the FLAC's LYRICS vorbis comment — no sidecar files. The player reads
+the embedded tag directly, and the FLAC stays self-contained when synced to the phone.
 """
 import base64
 import os
@@ -290,20 +291,6 @@ def fetch(artist, title, allow_slow=False):
     if lr_plain:
         return PLAIN, None, lr_plain
     return NONE, None, None
-
-
-def lrc_path(track_path):
-    return os.path.splitext(track_path)[0] + ".lrc"
-
-
-def write_sidecar(track_path, synced, plain):
-    body = synced or plain
-    if not body:
-        return None
-    path = lrc_path(track_path)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(body if body.endswith("\n") else body + "\n")
-    return path
 
 
 def embed(track_path, synced, plain):
