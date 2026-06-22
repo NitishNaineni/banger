@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=Gapless
+Name=Banger
 GenericName=Music Player
-Comment=Play your music elegantly
+Comment=Discover, audition, and like music — cross-device with ListenBrainz
 Exec=g4music %U
 Icon=@app_id@
 Terminal=false

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
     <id>@app_id@</id>
-    <name>Gapless</name>
+    <name>Banger</name>
     <metadata_license>CC0-1.0</metadata_license>
     <project_license>GPL-3.0-or-later</project_license>
-    <summary>Play your music elegantly</summary>
+    <summary>Discover, audition, and like music across devices</summary>
 
     <developer id="com.github.neithern">
         <name translate="no">Nanling</name>
@@ -21,7 +21,7 @@
     <translation type="gettext">g4music</translation>
 
     <description>
-      	<p>Gapless (AKA: G4Music) is a light weight music player written in GTK4, focuses on large music collection.</p>
+      	<p>Banger is a music-discovery player (a G4Music/Gapless fork) with cross-device audition, likes, and ListenBrainz sync.</p>
         <p>Features</p>
         <ul>
         <li>Supports most music file types, Samba and any other remote protocols (depends on GIO and GStreamer).</li>
