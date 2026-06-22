@@ -21,6 +21,10 @@ package org.oxycblt.auxio.playback
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Color
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.color.MaterialColors
 import android.media.audiofx.AudioEffect
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -274,8 +278,19 @@ class PlaybackPanelFragment :
         // banger: highlight 👍/👎 to reflect the current track's saved rating.
         val label =
             BangerLabels.labelFor(song.artists.resolveNames(context), song.name.resolve(context))
-        binding.playbackLike?.isChecked = label == "like"
-        binding.playbackDislike?.isChecked = label == "dislike"
+        applyRating(binding.playbackLike, label == "like", 0xFF43A047.toInt())
+        applyRating(binding.playbackDislike, label == "dislike", 0xFFE53935.toInt())
+    }
+
+    /** banger: solid green/red fill + white icon when the rating is active, plain otherwise. */
+    private fun applyRating(button: MaterialButton?, active: Boolean, activeColor: Int) {
+        button ?: return
+        button.isChecked = active
+        button.backgroundTintList =
+            ColorStateList.valueOf(if (active) activeColor else Color.TRANSPARENT)
+        val normal =
+            MaterialColors.getColor(button, com.google.android.material.R.attr.colorOnSurfaceVariant)
+        button.iconTint = ColorStateList.valueOf(if (active) Color.WHITE else normal)
     }
 
     private fun recordBanger(target: String) {
