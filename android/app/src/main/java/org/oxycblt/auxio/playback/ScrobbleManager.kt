@@ -82,7 +82,12 @@ private constructor(
         if (song?.uid != trackedUid) {
             trackedUid = song?.uid
             startedAt = System.currentTimeMillis() / 1000
-            logged = false
+            // Only count a song we watch cross the threshold from below. Joining one already
+            // past it — restored on app start, or seeked past — is not a fresh listen.
+            logged =
+                song != null &&
+                    playbackManager.progression.calculateElapsedPositionMs() >=
+                        minOf(THRESHOLD_MS, song.durationMs / 2)
         }
         pending?.cancel()
         if (song == null || logged || song.durationMs < 30_000) return
