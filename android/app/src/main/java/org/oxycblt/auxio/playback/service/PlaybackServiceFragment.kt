@@ -50,6 +50,7 @@ private constructor(
     sessionHolderFactory: MediaSessionHolder.Factory,
     widgetComponentFactory: WidgetComponent.Factory,
     systemReceiverFactory: SystemPlaybackReceiver.Factory,
+    scrobbleManagerFactory: org.oxycblt.auxio.playback.ScrobbleManager.Factory,
 ) : PlaybackStateManager.Listener {
     class Factory
     @Inject
@@ -60,6 +61,7 @@ private constructor(
         private val sessionHolderFactory: MediaSessionHolder.Factory,
         private val widgetComponentFactory: WidgetComponent.Factory,
         private val systemReceiverFactory: SystemPlaybackReceiver.Factory,
+        private val scrobbleManagerFactory: org.oxycblt.auxio.playback.ScrobbleManager.Factory,
     ) {
         fun create(context: Context, foregroundListener: ForegroundListener) =
             PlaybackServiceFragment(
@@ -71,6 +73,7 @@ private constructor(
                 sessionHolderFactory,
                 widgetComponentFactory,
                 systemReceiverFactory,
+                scrobbleManagerFactory,
             )
     }
 
@@ -86,6 +89,7 @@ private constructor(
             widgetComponent,
             onExitRequested = { playbackManager.endSession() },
         )
+    private val scrobbleManager = scrobbleManagerFactory.create()
 
     private fun scheduleAutoStop() {
         autoStopJob?.cancel()
@@ -119,6 +123,7 @@ private constructor(
         sessionHolder.attach()
         widgetComponent.attach()
         systemReceiver.attach()
+        scrobbleManager.attach()
         playbackManager.addListener(this)
         updateAutoStopTimer(playbackManager.progression.isPlaying)
         return sessionHolder.token
@@ -176,6 +181,7 @@ private constructor(
         autoStopJob?.cancel()
         waitJob.cancel()
         playbackManager.removeListener(this)
+        scrobbleManager.release()
         systemReceiver.release()
         widgetComponent.release()
         sessionHolder.release()

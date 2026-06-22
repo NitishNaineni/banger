@@ -18,10 +18,10 @@ import java.io.File
 import org.json.JSONObject
 
 object BangerLabels {
-    private val syncDir
+    internal val syncDir
         get() = File(Environment.getExternalStorageDirectory(), "Music/Library/.banger")
 
-    private fun deviceId(context: Context): String {
+    internal fun deviceId(context: Context): String {
         val id = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         return "ph-" + (id ?: "unknown").take(8)
     }

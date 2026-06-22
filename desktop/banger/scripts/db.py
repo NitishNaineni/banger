@@ -40,6 +40,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS ix_track_key
     ON tracks(COALESCE(NULLIF(mbid,''), artist || '|' || title));
 CREATE INDEX IF NOT EXISTS ix_track_batch ON tracks(batch);
 CREATE INDEX IF NOT EXISTS ix_track_label ON tracks(label);
+CREATE TABLE IF NOT EXISTS submitted_listens (   -- phone listens already sent to ListenBrainz
+    ts     INTEGER NOT NULL,
+    device TEXT NOT NULL,
+    PRIMARY KEY (ts, device)
+);
 """
 
 

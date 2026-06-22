@@ -15,13 +15,28 @@ played from ~/Music/audition/ or its ~/Music/library/ copy (same filename).
 
 Run under `uv run --project <bangerdir>` so troi/streamrip and config are available.
 """
-import argparse, json, os, pathlib, subprocess, sys, urllib.request
+import argparse, glob, json, os, pathlib, subprocess, sys, urllib.request
 from urllib.parse import unquote, urlparse
 import db
 from _paths import AUDITION, LIBRARY, audio_files, load_config, write_m3u
 
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 LB_FEEDBACK = "https://api.listenbrainz.org/1/feedback/recording-feedback"
+LB_SUBMIT = "https://api.listenbrainz.org/1/submit-listens"
+
+
+def _post_lb(url, obj, token):
+    """POST a JSON body to ListenBrainz. True=accepted, "net"=couldn't reach LB (retry the
+    whole backlog later), False=LB rejected this item (bad data — skip it)."""
+    body = json.dumps(obj).encode()
+    req = urllib.request.Request(
+        url, data=body, method="POST",
+        headers={"Authorization": f"Token {token}", "Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=12)
+        return True
+    except Exception as e:
+        return False if getattr(e, "code", None) in (400, 404) else "net"
 
 
 def _line(*fields):
@@ -47,17 +62,54 @@ def _send_feedback(mbid, score):
     token = _lb_token()
     if not token or not mbid:
         return False
-    body = json.dumps({"recording_mbid": mbid, "score": score}).encode()
-    req = urllib.request.Request(
-        LB_FEEDBACK, data=body, method="POST",
-        headers={"Authorization": f"Token {token}", "Content-Type": "application/json"})
-    try:
-        urllib.request.urlopen(req, timeout=12)
-        return True
-    except Exception as e:
-        # HTTPError has .code; 400/404 = this recording is bad -> skip it.
-        # anything else (timeout, 401/429/5xx, no network) -> stop and retry later.
-        return False if getattr(e, "code", None) in (400, 404) else "net"
+    return _post_lb(LB_FEEDBACK, {"recording_mbid": mbid, "score": score}, token)
+
+
+def _submit_listens(con):
+    """Submit phone listens (logged to .banger/listens-*.jsonl, synced from the phone) to
+    ListenBrainz exactly once each. Online or off: on a network failure we stop and retry the
+    whole backlog next time; a listen LB rejects is marked done so it can't block the rest."""
+    import labels_sync
+    token = _lb_token()
+    if not token:
+        return 0
+    done = {(r["ts"], r["device"]) for r in con.execute("SELECT ts, device FROM submitted_listens")}
+    pending = []
+    for path in glob.glob(os.path.join(labels_sync.SYNC_DIR, "listens-*.jsonl")):
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    e = json.loads(line)
+                    key = (int(e["ts"]), e.get("d", ""))
+                    if key in done:
+                        continue
+                    done.add(key)
+                    pending.append((key, e))
+        except Exception:
+            continue
+    n = 0
+    for (ts, dev), e in sorted(pending, key=lambda x: x[0][0]):
+        meta = {"artist_name": e.get("artist", ""), "track_name": e.get("title", "")}
+        if e.get("album"):
+            meta["release_name"] = e["album"]
+        meta["additional_info"] = {"submission_client": "banger"}
+        if not meta["artist_name"] or not meta["track_name"]:
+            continue                       # unusable — leave it out
+        payload = {"listen_type": "single",
+                   "payload": [{"listened_at": ts, "track_metadata": meta}]}
+        res = _post_lb(LB_SUBMIT, payload, token)
+        if res == "net":
+            break                          # can't reach LB — retry whole backlog later
+        # accepted, or rejected as bad: either way record it so it won't be retried forever
+        con.execute("INSERT OR IGNORE INTO submitted_listens(ts, device) VALUES (?,?)", (ts, dev))
+        if res is True:
+            n += 1
+    if pending:
+        con.commit()
+    return n
 
 
 def _flush_pending(con):
@@ -170,6 +222,7 @@ def cmd_label(con, path, rating, from_sync=False):
 
 def cmd_flush(con):
     _line("flushed", _flush_pending(con))
+    _line("listens", _submit_listens(con))
 
 
 def cmd_backfill_labels(con):
@@ -206,6 +259,7 @@ def cmd_reconcile_labels(con):
     if applied:
         con.commit()
         _flush_pending(con)                # push the phone-originated changes to LB
+    _submit_listens(con)                   # and any phone listens synced alongside them
     _line("ok", True)
     _line("applied", applied)
 
