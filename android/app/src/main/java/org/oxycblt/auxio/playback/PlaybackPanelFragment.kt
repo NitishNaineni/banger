@@ -300,7 +300,8 @@ class PlaybackPanelFragment :
         val title = song.name.resolve(context)
         // Tapping the already-active rating clears it.
         val newLabel = if (BangerLabels.labelFor(artist, title) == target) "none" else target
-        BangerLabels.record(context, artist, title, newLabel)
+        // No toast here — the button's solid green/red is the confirmation.
+        BangerLabels.record(context, artist, title, newLabel, showToast = false)
         updateSong(song)
     }
 

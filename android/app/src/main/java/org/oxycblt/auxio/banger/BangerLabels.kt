@@ -61,8 +61,18 @@ object BangerLabels {
     /** The current label ("like"/"dislike"/null) for a track, for the play-bar 👍/👎 state. */
     fun labelFor(artist: String, title: String): String? = mergedLabels()[key(artist, title)]
 
-    /** Record a like/dislike (or "none") for a track; artist/title come from the FLAC tags. */
-    fun record(context: Context, artist: String, title: String, label: String) {
+    /**
+     * Record a like/dislike (or "none") for a track; artist/title come from the FLAC tags.
+     * [showToast] confirms the action — used by the menu (no other feedback there); the play-row
+     * buttons pass false since their solid colour already shows the new state.
+     */
+    fun record(
+        context: Context,
+        artist: String,
+        title: String,
+        label: String,
+        showToast: Boolean = true,
+    ) {
         try {
             val key = key(artist, title)
             val entry = JSONObject()
@@ -73,13 +83,15 @@ object BangerLabels {
             val dir = syncDir.also { it.mkdirs() }
             File(dir, "labels-${deviceId(context)}.jsonl")
                 .appendText(entry.toString() + "\n")
-            val msg =
-                when (label) {
-                    "like" -> "👍 Liked"
-                    "dislike" -> "👎 Disliked"
-                    else -> "Rating cleared"
-                }
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            if (showToast) {
+                val msg =
+                    when (label) {
+                        "like" -> "👍 Liked"
+                        "dislike" -> "👎 Disliked"
+                        else -> "Rating cleared"
+                    }
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
         } catch (e: Exception) {
             Toast.makeText(context, "Couldn't save rating — grant All files access", Toast.LENGTH_LONG)
                 .show()
