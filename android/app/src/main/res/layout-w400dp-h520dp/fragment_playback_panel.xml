@@ -116,6 +116,16 @@
             android:spacing="@dimen/spacing_small">
 
             <org.oxycblt.auxio.ui.WidthFixMaterialButton
+                android:id="@+id/playback_dislike"
+                style="@style/Widget.Auxio.Button.Playback.Toggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="Dislike"
+                app:icon="@drawable/ic_banger_dislike_24"
+                app:materialSizeOverlay="@style/SizeOverlay.Material3Expressive.Button.IconButton.Xsmall"
+                app:tint="@color/sel_activatable_icon" />
+
+            <org.oxycblt.auxio.ui.WidthFixMaterialButton
                 android:id="@+id/playback_repeat"
                 style="@style/Widget.Auxio.Button.Playback.Toggle"
                 android:layout_width="wrap_content"
@@ -180,6 +190,16 @@
                 app:layout_constraintStart_toEndOf="@+id/playback_skip_next"
                 app:layout_constraintTop_toTopOf="parent"
                 app:materialSizeOverlay="@style/SizeOverlay.Material3Expressive.Button.IconButton.Medium"
+                app:tint="@color/sel_activatable_icon" />
+
+            <org.oxycblt.auxio.ui.WidthFixMaterialButton
+                android:id="@+id/playback_like"
+                style="@style/Widget.Auxio.Button.Playback.Toggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="Like"
+                app:icon="@drawable/ic_banger_like_24"
+                app:materialSizeOverlay="@style/SizeOverlay.Material3Expressive.Button.IconButton.Xsmall"
                 app:tint="@color/sel_activatable_icon" />
 
         </com.google.android.material.button.MaterialButtonGroup>

@@ -39,6 +39,7 @@ import org.oxycblt.auxio.R
 import org.oxycblt.auxio.databinding.FragmentPlaybackPanelBinding
 import org.oxycblt.auxio.detail.DetailViewModel
 import org.oxycblt.auxio.list.ListViewModel
+import org.oxycblt.auxio.banger.BangerLabels
 import org.oxycblt.auxio.music.resolve
 import org.oxycblt.auxio.music.resolveNames
 import org.oxycblt.auxio.playback.queue.QueueViewModel
@@ -169,6 +170,9 @@ class PlaybackPanelFragment :
                 listModel.openMenu(R.menu.playback_song, it, PlaySong.ByItself)
             }
         }
+        // banger: 👍/👎 on the play row (toggles off if you tap the active one).
+        binding.playbackLike?.setOnClickListener { recordBanger("like") }
+        binding.playbackDislike?.setOnClickListener { recordBanger("dislike") }
 
         // --- VIEWMODEL SETUP --
         collectImmediately(playbackModel.song, ::updateSong)
@@ -267,6 +271,22 @@ class PlaybackPanelFragment :
         binding.playbackArtist.text = song.artists.resolveNames(context)
         binding.playbackAlbum?.text = song.album.name.resolve(context)
         binding.playbackSeekBar?.durationDs = song.durationMs.msToDs()
+        // banger: highlight 👍/👎 to reflect the current track's saved rating.
+        val label =
+            BangerLabels.labelFor(song.artists.resolveNames(context), song.name.resolve(context))
+        binding.playbackLike?.isActivated = label == "like"
+        binding.playbackDislike?.isActivated = label == "dislike"
+    }
+
+    private fun recordBanger(target: String) {
+        val song = playbackModel.song.value ?: return
+        val context = requireContext()
+        val artist = song.artists.resolveNames(context)
+        val title = song.name.resolve(context)
+        // Tapping the already-active rating clears it.
+        val newLabel = if (BangerLabels.labelFor(artist, title) == target) "none" else target
+        BangerLabels.record(context, artist, title, newLabel)
+        updateSong(song)
     }
 
     private fun updateParent(parent: MusicParent?) {
