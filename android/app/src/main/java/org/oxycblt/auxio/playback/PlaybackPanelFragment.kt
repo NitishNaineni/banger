@@ -274,8 +274,8 @@ class PlaybackPanelFragment :
         // banger: highlight 👍/👎 to reflect the current track's saved rating.
         val label =
             BangerLabels.labelFor(song.artists.resolveNames(context), song.name.resolve(context))
-        binding.playbackLike?.isActivated = label == "like"
-        binding.playbackDislike?.isActivated = label == "dislike"
+        binding.playbackLike?.isChecked = label == "like"
+        binding.playbackDislike?.isChecked = label == "dislike"
     }
 
     private fun recordBanger(target: String) {
