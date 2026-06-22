@@ -15,7 +15,7 @@ played from ~/Music/audition/ or its ~/Music/library/ copy (same filename).
 
 Run under `uv run --project <bangerdir>` so troi/streamrip and config are available.
 """
-import argparse, glob, json, os, pathlib, subprocess, sys, urllib.request
+import argparse, glob, json, os, pathlib, shutil, subprocess, sys, urllib.request
 from urllib.parse import unquote, urlparse
 import db
 from _paths import AUDITION, LIBRARY, audio_files, load_config, write_m3u
@@ -237,6 +237,37 @@ def cmd_backfill_labels(con):
     _line("backfilled", n)
 
 
+def _materialize_library(file, label):
+    """Mirror the desktop's like = copy the track into ~/Music/library (lives in both folders);
+    dislike/none = remove the library copy (the audition copy is never touched). Used for phone-
+    originated ratings applied during reconcile, so a phone like shows up in the PC's Library."""
+    if not file:
+        return
+    name = os.path.basename(file)
+    dst = os.path.join(LIBRARY, name)
+    aud = os.path.join(AUDITION, name)
+    if label == "like":
+        if not os.path.exists(dst):
+            src = file if os.path.exists(file) else aud
+            if os.path.exists(src):
+                os.makedirs(LIBRARY, exist_ok=True)
+                try:
+                    shutil.copy2(src, dst)
+                except OSError:
+                    pass
+    elif os.path.exists(dst):
+        # dislike/none: drop the library copy; but if the audition copy is gone (old batch),
+        # move it back to audition instead so the track is never destroyed (stays re-auditionable).
+        try:
+            if os.path.exists(aud):
+                os.remove(dst)
+            else:
+                os.makedirs(AUDITION, exist_ok=True)
+                shutil.move(dst, aud)
+        except OSError:
+            pass
+
+
 def cmd_reconcile_labels(con):
     """Merge every device's CRDT log (last-writer-wins) and apply any decision that the
     DB doesn't yet reflect — i.e. likes/dislikes made on the phone — then deliver them to
@@ -246,7 +277,7 @@ def cmd_reconcile_labels(con):
     applied = 0
     for k, (label, _ts, _dev) in merged.items():
         row = con.execute(
-            "SELECT id, label FROM tracks WHERE lower(artist) || '|' || lower(title) = ?",
+            "SELECT id, label, file FROM tracks WHERE lower(artist) || '|' || lower(title) = ?",
             (k,)).fetchone()
         if row is None:
             continue                       # a track we don't have a row for — skip
@@ -255,6 +286,7 @@ def cmd_reconcile_labels(con):
             continue                       # already in sync
         con.execute("UPDATE tracks SET label=?, updated_at=datetime('now') WHERE id=?",
                     (None if want == "none" else want, row["id"]))
+        _materialize_library(row["file"], want)   # copy into / remove from ~/Music/library
         applied += 1
     if applied:
         con.commit()
