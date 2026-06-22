@@ -38,6 +38,11 @@ namespace G4 {
             }
         }
 
+        // Touching .instance runs construct() (file monitors + periodic sweep + startup
+        // reconcile). Call this from app startup so the sync/ListenBrainz watchers are live
+        // even when g4music runs in the background with no window open.
+        public void ensure_started () { }
+
         private string _home;
         private string _uv;
         private string _script;

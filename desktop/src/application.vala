@@ -36,6 +36,10 @@ namespace G4 {
         public override void startup () {
             base.startup ();
 
+            // Bring up the banger sync service now so its CRDT + ListenBrainz watchers run even
+            // when g4music is in the background (no window) — phone activity still reconciles.
+            BangerService.instance.ensure_started ();
+
             //  Must load tag cache after the app register (GLib init), to make sort works
             _loader.load_tag_cache ();
 
