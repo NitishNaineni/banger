@@ -85,7 +85,7 @@ class AlbumListFragment :
 
         binding.homeNoMusicAction.setOnClickListener { homeModel.startChooseMusicLocations() }
 
-        collectImmediately(homeModel.albumList, ::updateAlbums)
+        collectImmediately(homeModel.libraryAlbums, ::updateAlbums)
         collectImmediately(homeModel.empty, musicModel.indexingState, ::updateNoMusicIndicator)
         collectImmediately(listModel.selected, ::updateSelection)
         collectImmediately(
@@ -105,8 +105,14 @@ class AlbumListFragment :
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // banger: Albums reflects the Library (liked) — refresh so new likes show.
+        homeModel.refreshLibrary()
+    }
+
     override fun getPopupData(pos: Int): FastScrollRecyclerView.PopupProvider.PopupData? {
-        val album = homeModel.albumList.value.getOrNull(pos) ?: return null
+        val album = homeModel.libraryAlbums.value.getOrNull(pos) ?: return null
         // Change how we display the popup depending on the current sort mode.
         return when (homeModel.albumSort.mode) {
             // By Name -> Use Name

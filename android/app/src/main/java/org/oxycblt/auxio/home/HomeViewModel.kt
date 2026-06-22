@@ -149,6 +149,16 @@ constructor(
     val librarySongs: StateFlow<List<Song>>
         get() = _librarySongs
 
+    // banger: Artists/Albums tabs reflect the Library (liked tracks), like the desktop —
+    // only artists/albums that contain a liked song.
+    private val _libraryArtists = MutableStateFlow(listOf<Artist>())
+    val libraryArtists: StateFlow<List<Artist>>
+        get() = _libraryArtists
+
+    private val _libraryAlbums = MutableStateFlow(listOf<Album>())
+    val libraryAlbums: StateFlow<List<Album>>
+        get() = _libraryAlbums
+
     /** The fixed banger tab set (replaces Auxio's configurable MusicType tabs). */
     val currentTabTypes = BangerTab.ALL
 
@@ -200,14 +210,17 @@ constructor(
                 // label), so it matches the desktop regardless of Auxio's file dedup.
                 _auditionSongs.value = all.filter { BangerTab.isAudition(it) }
                 _librarySongs.value = likedSongs(all)
+                recomputeLibraryViews()
             }
             MusicType.ALBUMS -> {
                 _albumInstructions.put(instructions)
                 _albumList.value = homeGenerator.albums()
+                recomputeLibraryViews()
             }
             MusicType.ARTISTS -> {
                 _artistInstructions.put(instructions)
                 _artistList.value = homeGenerator.artists()
+                recomputeLibraryViews()
             }
             MusicType.GENRES -> {
                 _genreInstructions.put(instructions)
@@ -234,9 +247,19 @@ constructor(
         }
     }
 
-    /** Re-read the CRDT log and rebuild the Library tab (after a like here, or a sync). */
+    /** Re-read the CRDT log and rebuild the Library views (after a like here, or a sync). */
     fun refreshLibrary() {
         _librarySongs.value = likedSongs(_songList.value)
+        recomputeLibraryViews()
+    }
+
+    /** Keep the Artists/Albums tabs to artists/albums that contain a liked song. */
+    private fun recomputeLibraryViews() {
+        val liked = _librarySongs.value
+        val albumUids = liked.mapTo(HashSet()) { it.album.uid }
+        val artistUids = liked.flatMap { it.artists }.mapTo(HashSet()) { it.uid }
+        _libraryAlbums.value = _albumList.value.filter { it.uid in albumUids }
+        _libraryArtists.value = _artistList.value.filter { it.uid in artistUids }
     }
 
     /**
