@@ -256,10 +256,22 @@ constructor(
     /** Keep the Artists/Albums tabs to artists/albums that contain a liked song. */
     private fun recomputeLibraryViews() {
         val liked = _librarySongs.value
+        val likedUids = liked.mapTo(HashSet()) { it.uid }
         val albumUids = liked.mapTo(HashSet()) { it.album.uid }
         val artistUids = liked.flatMap { it.artists }.mapTo(HashSet()) { it.uid }
         _libraryAlbums.value = _albumList.value.filter { it.uid in albumUids }
-        _libraryArtists.value = _artistList.value.filter { it.uid in artistUids }
+        // Wrap each artist so its row count ("N albums · M songs") reflects only liked content.
+        _libraryArtists.value =
+            _artistList.value
+                .filter { it.uid in artistUids }
+                .map { a ->
+                    org.oxycblt.auxio.banger.LibraryArtist(
+                        a,
+                        a.songs.filter { it.uid in likedUids },
+                        a.explicitAlbums.filter { al -> al.songs.any { it.uid in likedUids } },
+                        a.implicitAlbums.filter { al -> al.songs.any { it.uid in likedUids } },
+                    )
+                }
     }
 
     /**

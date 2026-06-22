@@ -24,6 +24,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import org.oxycblt.auxio.R
 import org.oxycblt.auxio.banger.BangerLabels
+import org.oxycblt.auxio.banger.LibraryAlbum
+import org.oxycblt.auxio.banger.LibraryArtist
 import org.oxycblt.auxio.list.ListSettings
 import org.oxycblt.auxio.list.sort.Sort
 import org.oxycblt.auxio.music.MusicRepository
@@ -139,14 +141,16 @@ private class DetailGeneratorImpl(
             } else {
                 DetailSection.Songs(songs)
             }
-        return Detail(album, listOf(section))
+        // Wrap so the header count ("N songs") matches the filtered list.
+        return Detail<Album>(LibraryAlbum(album, songs), listOf(section))
     }
 
     override fun artist(uid: Music.UID): Detail<Artist>? {
         val artist = musicRepository.library?.findArtist(uid) ?: return null
         val liked = likedKeys()
+        val explicitAlbums = artist.explicitAlbums.toLibraryAlbums(liked)
         val grouping =
-            artist.explicitAlbums.toLibraryAlbums(liked).groupByTo(sortedMapOf()) {
+            explicitAlbums.groupByTo(sortedMapOf()) {
                 // Remap the complicated ReleaseType data structure into detail sections
                 when (it.releaseType.refinement) {
                     ReleaseType.Refinement.LIVE -> DetailSection.Albums.Category.LIVE
@@ -179,7 +183,11 @@ private class DetailGeneratorImpl(
         if (artistSongs.isNotEmpty()) {
             sections.add(DetailSection.Songs(artistSongs))
         }
-        return Detail(artist, sections)
+        // Wrap so the header count ("N albums · M songs") matches the filtered sections.
+        return Detail<Artist>(
+            LibraryArtist(artist, artistSongs, explicitAlbums, implicitAlbums),
+            sections,
+        )
     }
 
     override fun genre(uid: Music.UID): Detail<Genre>? {
