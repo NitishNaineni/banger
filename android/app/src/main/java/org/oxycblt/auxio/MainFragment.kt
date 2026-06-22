@@ -50,7 +50,7 @@ import org.oxycblt.auxio.home.HomeViewModel
 import org.oxycblt.auxio.home.Outer
 import org.oxycblt.auxio.list.ListViewModel
 import org.oxycblt.auxio.music.IndexingState
-import org.oxycblt.auxio.music.MusicType
+import org.oxycblt.auxio.home.BangerTab
 import org.oxycblt.auxio.music.MusicViewModel
 import org.oxycblt.auxio.playback.OpenPanel
 import org.oxycblt.auxio.playback.PlaybackBottomSheetBehavior
@@ -411,7 +411,7 @@ class MainFragment :
         )
     }
 
-    private fun updateCurrentTab(tabType: MusicType) {
+    private fun updateCurrentTab(tabType: BangerTab) {
         val binding = requireBinding()
         updateFabVisibility(
             binding,
@@ -443,7 +443,7 @@ class MainFragment :
         binding: FragmentMainBinding,
         songs: List<Song>,
         isFastScrolling: Boolean,
-        tabType: MusicType,
+        @Suppress("UNUSED_PARAMETER") tabType: BangerTab,
     ) {
         // If there are no songs, it's likely that the library has not been loaded, so
         // displaying the shuffle FAB makes no sense. We also don't want the fast scroll
@@ -452,7 +452,8 @@ class MainFragment :
             L.d("Hiding fab: [empty: ${songs.isEmpty()} scrolling: $isFastScrolling]")
             forceHideAllFabs()
         } else {
-            if (tabType != MusicType.PLAYLISTS) {
+            // banger: no Playlists tab, so the shuffle FAB applies to every tab.
+            if (true) {
                 if (binding.homeShuffleFab.isOrWillBeShown) {
                     return
                 }

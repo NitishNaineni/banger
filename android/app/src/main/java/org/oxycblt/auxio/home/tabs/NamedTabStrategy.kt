@@ -20,10 +20,10 @@ package org.oxycblt.auxio.home.tabs
 
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator.TabConfigurationStrategy
-import org.oxycblt.auxio.music.MusicType
+import org.oxycblt.auxio.home.BangerTab
 
-class NamedTabStrategy(private val homeTabs: List<MusicType>) : TabConfigurationStrategy {
+class NamedTabStrategy(private val homeTabs: List<BangerTab>) : TabConfigurationStrategy {
     override fun onConfigureTab(tab: TabLayout.Tab, position: Int) {
-        tab.setText(homeTabs[position].nameRes)
+        tab.text = homeTabs[position].title
     }
 }

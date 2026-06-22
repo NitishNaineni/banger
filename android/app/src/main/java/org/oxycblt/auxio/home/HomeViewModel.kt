@@ -135,16 +135,21 @@ constructor(
 
     private val homeGenerator = homeGeneratorFactory.create(this)
 
-    /**
-     * A list of [MusicType] corresponding to the current [Tab] configuration, excluding invisible
-     * [Tab]s.
-     */
-    var currentTabTypes = homeGenerator.tabs()
-        private set
+    // banger: Audition + Library are the song list split by folder.
+    private val _auditionSongs = MutableStateFlow(listOf<Song>())
+    val auditionSongs: StateFlow<List<Song>>
+        get() = _auditionSongs
+
+    private val _librarySongs = MutableStateFlow(listOf<Song>())
+    val librarySongs: StateFlow<List<Song>>
+        get() = _librarySongs
+
+    /** The fixed banger tab set (replaces Auxio's configurable MusicType tabs). */
+    val currentTabTypes = BangerTab.ALL
 
     private val _currentTabType = MutableStateFlow(currentTabTypes[0])
-    /** The [MusicType] of the currently shown [Tab]. */
-    val currentTabType: StateFlow<MusicType> = _currentTabType
+    /** The currently shown banger tab. */
+    val currentTabType: StateFlow<BangerTab> = _currentTabType
 
     private val _shouldRecreate = MutableEvent<Unit>()
     /**
@@ -184,7 +189,11 @@ constructor(
         when (type) {
             MusicType.SONGS -> {
                 _songInstructions.put(instructions)
-                _songList.value = homeGenerator.songs()
+                val all = homeGenerator.songs()
+                _songList.value = all
+                // banger: split the pool into the Audition vs Library tabs by folder.
+                _auditionSongs.value = all.filter { BangerTab.isAudition(it) }
+                _librarySongs.value = all.filter { !BangerTab.isAudition(it) }
             }
             MusicType.ALBUMS -> {
                 _albumInstructions.put(instructions)
@@ -206,7 +215,7 @@ constructor(
     }
 
     override fun invalidateTabs() {
-        currentTabTypes = homeGenerator.tabs()
+        // banger: tabs are fixed (Audition/Library/Artists/Albums), nothing to reconfigure.
         _shouldRecreate.put(Unit)
     }
 

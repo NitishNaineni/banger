@@ -28,6 +28,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
 import org.oxycblt.auxio.R
 import org.oxycblt.auxio.databinding.FragmentHomeListBinding
+import org.oxycblt.auxio.home.BangerTab
 import org.oxycblt.auxio.home.HomeViewModel
 import org.oxycblt.auxio.list.ListFragment
 import org.oxycblt.auxio.list.ListViewModel
@@ -61,6 +62,20 @@ class SongListFragment :
     override val playbackModel: PlaybackViewModel by activityViewModels()
     private val songAdapter = SongAdapter(this)
 
+    // banger: this fragment serves either the Audition or the Library tab (folder-filtered).
+    private val bangerTab: BangerTab
+        get() = BangerTab.valueOf(arguments?.getString(ARG_TAB) ?: BangerTab.LIBRARY.name)
+
+    private val sourceSongs
+        get() = if (bangerTab == BangerTab.AUDITION) homeModel.auditionSongs else homeModel.librarySongs
+
+    companion object {
+        private const val ARG_TAB = "banger_tab"
+
+        fun newInstance(tab: BangerTab) =
+            SongListFragment().apply { arguments = Bundle().apply { putString(ARG_TAB, tab.name) } }
+    }
+
     override fun onCreateBinding(inflater: LayoutInflater) =
         FragmentHomeListBinding.inflate(inflater)
 
@@ -82,7 +97,7 @@ class SongListFragment :
 
         binding.homeNoMusicAction.setOnClickListener { homeModel.startChooseMusicLocations() }
 
-        collectImmediately(homeModel.songList, ::updateSongs)
+        collectImmediately(sourceSongs, ::updateSongs)
         collectImmediately(homeModel.empty, musicModel.indexingState, ::updateNoMusicIndicator)
         collectImmediately(listModel.selected, ::updateSelection)
         collectImmediately(
@@ -103,7 +118,7 @@ class SongListFragment :
     }
 
     override fun getPopupData(pos: Int): FastScrollRecyclerView.PopupProvider.PopupData? {
-        val song = homeModel.songList.value.getOrNull(pos) ?: return null
+        val song = sourceSongs.value.getOrNull(pos) ?: return null
         // Change how we display the popup depending on the current sort mode.
         // Note: We don't use the more correct individual artist name here, as sorts are largely
         // based off the names of the parent objects and not the child objects.

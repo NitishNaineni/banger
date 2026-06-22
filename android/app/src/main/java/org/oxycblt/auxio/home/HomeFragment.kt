@@ -209,11 +209,9 @@ class HomeFragment : SelectionFragment<FragmentHomeBinding>() {
                 // Junk click event when opening the menu
                 val directions =
                     when (homeModel.currentTabType.value) {
-                        MusicType.SONGS -> HomeFragmentDirections.sortSongs()
-                        MusicType.ALBUMS -> HomeFragmentDirections.sortAlbums()
-                        MusicType.ARTISTS -> HomeFragmentDirections.sortArtists()
-                        MusicType.GENRES -> HomeFragmentDirections.sortGenres()
-                        MusicType.PLAYLISTS -> HomeFragmentDirections.sortPlaylists()
+                        BangerTab.AUDITION, BangerTab.LIBRARY -> HomeFragmentDirections.sortSongs()
+                        BangerTab.ARTISTS -> HomeFragmentDirections.sortArtists()
+                        BangerTab.ALBUMS -> HomeFragmentDirections.sortAlbums()
                     }
                 findNavController().navigateSafe(directions)
                 true
@@ -253,19 +251,15 @@ class HomeFragment : SelectionFragment<FragmentHomeBinding>() {
             .attach()
     }
 
-    private fun updateCurrentTab(tabType: MusicType) {
+    private fun updateCurrentTab(tabType: BangerTab) {
         val binding = requireBinding()
 
-        // Update the scrolling view in AppBarLayout to align with the current tab's
-        // scrolling state. This prevents the lift state from being confused as one
-        // goes between different tabs.
+        // Align the AppBarLayout lift target with the current tab's recycler.
         binding.homeAppbar.liftOnScrollTargetViewId =
             when (tabType) {
-                MusicType.SONGS -> R.id.home_song_recycler
-                MusicType.ALBUMS -> R.id.home_album_recycler
-                MusicType.ARTISTS -> R.id.home_artist_recycler
-                MusicType.GENRES -> R.id.home_genre_recycler
-                MusicType.PLAYLISTS -> R.id.home_playlist_recycler
+                BangerTab.AUDITION, BangerTab.LIBRARY -> R.id.home_song_recycler
+                BangerTab.ARTISTS -> R.id.home_artist_recycler
+                BangerTab.ALBUMS -> R.id.home_album_recycler
             }
     }
 
@@ -475,7 +469,7 @@ class HomeFragment : SelectionFragment<FragmentHomeBinding>() {
      *   [FragmentStateAdapter].
      */
     private class HomePagerAdapter(
-        private val tabs: List<MusicType>,
+        private val tabs: List<BangerTab>,
         fragmentManager: FragmentManager,
         lifecycleOwner: LifecycleOwner,
     ) : FragmentStateAdapter(fragmentManager, lifecycleOwner.lifecycle) {
@@ -483,11 +477,10 @@ class HomeFragment : SelectionFragment<FragmentHomeBinding>() {
 
         override fun createFragment(position: Int): Fragment =
             when (tabs[position]) {
-                MusicType.SONGS -> SongListFragment()
-                MusicType.ALBUMS -> AlbumListFragment()
-                MusicType.ARTISTS -> ArtistListFragment()
-                MusicType.GENRES -> GenreListFragment()
-                MusicType.PLAYLISTS -> PlaylistListFragment()
+                BangerTab.AUDITION -> SongListFragment.newInstance(BangerTab.AUDITION)
+                BangerTab.LIBRARY -> SongListFragment.newInstance(BangerTab.LIBRARY)
+                BangerTab.ARTISTS -> ArtistListFragment()
+                BangerTab.ALBUMS -> AlbumListFragment()
             }
     }
 }
