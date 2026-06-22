@@ -41,7 +41,11 @@ internal class LocationObserver(
     }
 
     override fun onChange(selfChange: Boolean) {
-        // Batch rapid-fire updates into a single callback after delay
+        // Coalesce a burst of updates into ONE re-index. A Syncthing batch (the desktop
+        // dropping ~100 tracks) lands file-by-file over minutes; each one pokes MediaStore.
+        // With a short delay we'd re-scan the whole growing library once per file (dozens of
+        // times, churning CPU). The longer settle window collapses the whole batch into a
+        // single scan once the files stop arriving.
         handler.removeCallbacks(this)
         handler.postDelayed(this, REINDEX_DELAY_MS)
     }
@@ -51,6 +55,6 @@ internal class LocationObserver(
     }
 
     private companion object {
-        const val REINDEX_DELAY_MS = 500L
+        const val REINDEX_DELAY_MS = 8000L
     }
 }
