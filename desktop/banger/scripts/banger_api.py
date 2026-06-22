@@ -172,6 +172,18 @@ def cmd_flush(con):
     _line("flushed", _flush_pending(con))
 
 
+def cmd_backfill_labels(con):
+    """One-time: seed the CRDT log with the current DB like/dislike state, so ratings made
+    before cross-device sync existed still reach the phone (its Library tab is label-driven)."""
+    import labels_sync
+    n = 0
+    for r in con.execute("SELECT artist, title, label FROM tracks WHERE label IN ('like','dislike')"):
+        labels_sync.record(r["artist"], r["title"], r["label"])
+        n += 1
+    _line("ok", True)
+    _line("backfilled", n)
+
+
 def cmd_reconcile_labels(con):
     """Merge every device's CRDT log (last-writer-wins) and apply any decision that the
     DB doesn't yet reflect — i.e. likes/dislikes made on the phone — then deliver them to
@@ -393,6 +405,7 @@ def main():
     sub.add_parser("refresh")
     sub.add_parser("flush")
     sub.add_parser("reconcile-labels")
+    sub.add_parser("backfill-labels")
     p_add = sub.add_parser("add")
     p_add.add_argument("--url", required=True)
     sub.add_parser("sync")
@@ -416,6 +429,8 @@ def main():
         cmd_label(con, args.file, args.rating, from_sync=args.from_sync)
     elif args.cmd == "reconcile-labels":
         cmd_reconcile_labels(con)
+    elif args.cmd == "backfill-labels":
+        cmd_backfill_labels(con)
     elif args.cmd == "flush":
         cmd_flush(con)
     con.close()

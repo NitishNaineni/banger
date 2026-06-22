@@ -27,7 +27,10 @@ import org.oxycblt.auxio.home.tabs.Tab
 import org.oxycblt.auxio.list.ListSettings
 import org.oxycblt.auxio.list.adapter.UpdateInstructions
 import org.oxycblt.auxio.list.sort.Sort
+import org.oxycblt.auxio.banger.BangerLabels
 import org.oxycblt.auxio.music.MusicType
+import org.oxycblt.auxio.music.resolve
+import org.oxycblt.auxio.music.resolveNames
 import org.oxycblt.auxio.playback.PlaySong
 import org.oxycblt.auxio.playback.PlaybackSettings
 import org.oxycblt.auxio.util.Event
@@ -48,6 +51,8 @@ import timber.log.Timber as L
 class HomeViewModel
 @Inject
 constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext
+    private val context: android.content.Context,
     private val listSettings: ListSettings,
     private val playbackSettings: PlaybackSettings,
     homeGeneratorFactory: HomeGenerator.Factory,
@@ -191,9 +196,10 @@ constructor(
                 _songInstructions.put(instructions)
                 val all = homeGenerator.songs()
                 _songList.value = all
-                // banger: split the pool into the Audition vs Library tabs by folder.
+                // banger: Audition = the audition folder; Library = your liked tracks (CRDT
+                // label), so it matches the desktop regardless of Auxio's file dedup.
                 _auditionSongs.value = all.filter { BangerTab.isAudition(it) }
-                _librarySongs.value = all.filter { !BangerTab.isAudition(it) }
+                _librarySongs.value = likedSongs(all)
             }
             MusicType.ALBUMS -> {
                 _albumInstructions.put(instructions)
@@ -217,6 +223,20 @@ constructor(
     override fun invalidateTabs() {
         // banger: tabs are fixed (Audition/Library/Artists/Albums), nothing to reconfigure.
         _shouldRecreate.put(Unit)
+    }
+
+    /** Songs whose merged CRDT label is currently "like" (matched by "artist|title"). */
+    private fun likedSongs(all: List<Song>): List<Song> {
+        val liked = BangerLabels.likedKeys()
+        if (liked.isEmpty()) return emptyList()
+        return all.filter {
+            BangerLabels.key(it.artists.resolveNames(context), it.name.resolve(context)) in liked
+        }
+    }
+
+    /** Re-read the CRDT log and rebuild the Library tab (after a like here, or a sync). */
+    fun refreshLibrary() {
+        _librarySongs.value = likedSongs(_songList.value)
     }
 
     /**

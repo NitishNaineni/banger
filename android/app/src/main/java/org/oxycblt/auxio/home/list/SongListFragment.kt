@@ -117,6 +117,13 @@ class SongListFragment :
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // banger: the Library tab is CRDT-liked; re-read the log so likes made here or synced
+        // from the desktop show up without needing a rescan.
+        if (bangerTab == BangerTab.LIBRARY) homeModel.refreshLibrary()
+    }
+
     override fun getPopupData(pos: Int): FastScrollRecyclerView.PopupProvider.PopupData? {
         val song = sourceSongs.value.getOrNull(pos) ?: return null
         // Change how we display the popup depending on the current sort mode.
