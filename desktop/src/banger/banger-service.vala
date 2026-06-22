@@ -47,6 +47,7 @@ namespace G4 {
         private File _audition = File.new_build_filename (Environment.get_home_dir (), "Music", "audition");
 
         private FileMonitor? _lib_monitor = null;
+        private FileMonitor? _banger_monitor = null;
         private uint _sync_timer = 0;
         private uint _reconcile_timer = 0;
         private bool _syncing = false;
@@ -68,8 +69,10 @@ namespace G4 {
             // back — and once now on startup, so a rating made offline last session
             // (or one that failed) is guaranteed to reach ListenBrainz at some point.
             NetworkMonitor.get_default ().network_changed.connect ((available) => {
-                if (available)
+                if (available) {
                     flush_feedback.begin ((obj, res) => flush_feedback.end (res));
+                    schedule_reconcile ();   // apply + ship anything that synced while offline
+                }
             });
             flush_feedback.begin ((obj, res) => flush_feedback.end (res));
 
@@ -87,6 +90,36 @@ namespace G4 {
                 });
             } catch (Error e) {
             }
+
+            // The parent-folder monitor above does NOT report changes inside subdirectories, and
+            // the CRDT logs + phone listens live in ~/Music/library/.banger/. Watch that folder
+            // directly so a phone like/dislike/listen synced in is reconciled within seconds.
+            var banger_dir = File.new_build_filename (
+                Environment.get_home_dir (), "Music", "library", ".banger");
+            try {
+                banger_dir.make_directory_with_parents ();
+            } catch (Error e) {
+            }
+            try {
+                _banger_monitor = banger_dir.monitor_directory (FileMonitorFlags.WATCH_MOVES);
+                ((!) _banger_monitor).changed.connect ((file, other, ev) => {
+                    if (ev == FileMonitorEvent.CREATED || ev == FileMonitorEvent.MOVED_IN
+                        || ev == FileMonitorEvent.RENAMED || ev == FileMonitorEvent.CHANGED
+                        || ev == FileMonitorEvent.CHANGES_DONE_HINT) {
+                        schedule_reconcile ();
+                    }
+                });
+            } catch (Error e) {
+            }
+
+            // Safety net: sweep the backlog every few minutes even with no file or network event,
+            // so an offline rating/listen — or one LB rejected while it was down — still lands.
+            Timeout.add_seconds (300, () => {
+                reconcile_labels.begin ((o, r) => reconcile_labels.end (r));
+                flush_feedback.begin ((o, r) => flush_feedback.end (r));
+                return Source.CONTINUE;
+            });
+
             schedule_sync ();        // import anything added while the app was closed
             schedule_reconcile ();   // pull in like/dislike decisions made on the phone
         }

@@ -258,8 +258,8 @@ def cmd_reconcile_labels(con):
         applied += 1
     if applied:
         con.commit()
-        _flush_pending(con)                # push the phone-originated changes to LB
-    _submit_listens(con)                   # and any phone listens synced alongside them
+    _flush_pending(con)                    # reconcile feedback with LB (cheap; no-op when in sync)
+    _submit_listens(con)                   # and submit any phone listens synced alongside them
     _line("ok", True)
     _line("applied", applied)
 
