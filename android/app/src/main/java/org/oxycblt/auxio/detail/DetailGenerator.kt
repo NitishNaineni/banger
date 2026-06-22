@@ -18,13 +18,18 @@
  
 package org.oxycblt.auxio.detail
 
+import android.content.Context
 import androidx.annotation.StringRes
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import org.oxycblt.auxio.R
+import org.oxycblt.auxio.banger.BangerLabels
 import org.oxycblt.auxio.list.ListSettings
 import org.oxycblt.auxio.list.sort.Sort
 import org.oxycblt.auxio.music.MusicRepository
 import org.oxycblt.auxio.music.MusicType
+import org.oxycblt.auxio.music.resolve
+import org.oxycblt.auxio.music.resolveNames
 import org.oxycblt.musikr.Album
 import org.oxycblt.musikr.Artist
 import org.oxycblt.musikr.Genre
@@ -62,13 +67,17 @@ interface DetailGenerator {
 
 class DetailGeneratorFactoryImpl
 @Inject
-constructor(private val listSettings: ListSettings, private val musicRepository: MusicRepository) :
-    DetailGenerator.Factory {
+constructor(
+    @ApplicationContext private val context: Context,
+    private val listSettings: ListSettings,
+    private val musicRepository: MusicRepository,
+) : DetailGenerator.Factory {
     override fun create(invalidator: DetailGenerator.Invalidator): DetailGenerator =
-        DetailGeneratorImpl(invalidator, listSettings, musicRepository)
+        DetailGeneratorImpl(context, invalidator, listSettings, musicRepository)
 }
 
 private class DetailGeneratorImpl(
+    private val context: Context,
     private val invalidator: DetailGenerator.Invalidator,
     private val listSettings: ListSettings,
     private val musicRepository: MusicRepository,
@@ -122,7 +131,7 @@ private class DetailGeneratorImpl(
 
     override fun album(uid: Music.UID): Detail<Album>? {
         val album = musicRepository.library?.findAlbum(uid) ?: return null
-        val songs = listSettings.albumSongSort.songs(album.songs)
+        val songs = listSettings.albumSongSort.songs(album.songs).toLibrary(likedKeys())
         val discs = songs.groupBy { it.disc }
         val section =
             if (discs.size > 1) {
@@ -135,8 +144,9 @@ private class DetailGeneratorImpl(
 
     override fun artist(uid: Music.UID): Detail<Artist>? {
         val artist = musicRepository.library?.findArtist(uid) ?: return null
+        val liked = likedKeys()
         val grouping =
-            artist.explicitAlbums.groupByTo(sortedMapOf()) {
+            artist.explicitAlbums.toLibraryAlbums(liked).groupByTo(sortedMapOf()) {
                 // Remap the complicated ReleaseType data structure into detail sections
                 when (it.releaseType.refinement) {
                     ReleaseType.Refinement.LIVE -> DetailSection.Albums.Category.LIVE
@@ -155,19 +165,19 @@ private class DetailGeneratorImpl(
                 }
             }
 
-        if (artist.implicitAlbums.isNotEmpty()) {
+        val implicitAlbums = artist.implicitAlbums.toLibraryAlbums(liked)
+        if (implicitAlbums.isNotEmpty()) {
             L.d("Implicit albums present, adding to list")
-            grouping[DetailSection.Albums.Category.APPEARANCES] =
-                artist.implicitAlbums.toMutableList()
+            grouping[DetailSection.Albums.Category.APPEARANCES] = implicitAlbums.toMutableList()
         }
 
         val sections =
             grouping.mapTo(mutableListOf<DetailSection>()) { (category, albums) ->
                 DetailSection.Albums(category, ARTIST_ALBUM_SORT.albums(albums))
             }
-        if (artist.songs.isNotEmpty()) {
-            val songs = DetailSection.Songs(listSettings.artistSongSort.songs(artist.songs))
-            sections.add(songs)
+        val artistSongs = listSettings.artistSongSort.songs(artist.songs).toLibrary(liked)
+        if (artistSongs.isNotEmpty()) {
+            sections.add(DetailSection.Songs(artistSongs))
         }
         return Detail(artist, sections)
     }
@@ -175,8 +185,29 @@ private class DetailGeneratorImpl(
     override fun genre(uid: Music.UID): Detail<Genre>? {
         val genre = musicRepository.library?.findGenre(uid) ?: return null
         val artists = DetailSection.Artists(GENRE_ARTIST_SORT.artists(genre.artists))
-        val songs = DetailSection.Songs(listSettings.genreSongSort.songs(genre.songs))
+        val songs =
+            DetailSection.Songs(listSettings.genreSongSort.songs(genre.songs).toLibrary(likedKeys()))
         return Detail(genre, listOf(artists, songs))
+    }
+
+    // banger: in detail views, prefer your liked tracks (the "library"); fall back to the full
+    // set when nothing is liked (e.g. an audition-only artist opened from the player) so a
+    // detail is never empty.
+    private fun likedKeys() = BangerLabels.likedKeys()
+
+    private fun keyOf(song: Song) =
+        BangerLabels.key(song.artists.resolveNames(context), song.name.resolve(context))
+
+    private fun List<Song>.toLibrary(liked: Set<String>): List<Song> {
+        if (liked.isEmpty()) return this
+        val filtered = filter { keyOf(it) in liked }
+        return filtered.ifEmpty { this }
+    }
+
+    private fun Collection<Album>.toLibraryAlbums(liked: Set<String>): Collection<Album> {
+        if (liked.isEmpty()) return this
+        val filtered = filter { album -> album.songs.any { keyOf(it) in liked } }
+        return filtered.ifEmpty { this }
     }
 
     override fun playlist(uid: Music.UID): Detail<Playlist>? {
